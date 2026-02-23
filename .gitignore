@@ -1,0 +1,53 @@
+# === Binary & Build Artifacts ===
+bin/
+out/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+# Các file binary sinh ra khi chạy go build trong các folder cmd
+cmd/api/api
+cmd/migrate/migrate
+
+# === Go Specific ===
+vendor/
+# File log của go test hoặc các file cover profile
+*.out
+*.test
+coverage.txt
+# Backup files sinh ra bởi go mod tidy nếu có
+*.bak
+
+# === Environment & Secrets (CỰC KỲ QUAN TRỌNG) ===
+.env
+*.env
+# Không bao giờ bỏ qua file .env.example (vì nó không chứa secret)
+!.env.example
+
+# === IDE - GoLand / JetBrains (Bổ sung đầy đủ hơn) ===
+.idea/
+*.iml
+*.iws
+*.ipr
+# Một số file local của GoLand
+cmake-build-*/
+.DS_Store
+
+# === IDE - VS Code ===
+.vscode/
+*.code-workspace
+
+# === OS Specific ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === Docker ===
+.docker/
+# Lưu ý: Không ignore docker-compose.yml vì nó cần thiết để chạy dự án
