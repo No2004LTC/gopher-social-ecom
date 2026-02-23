@@ -1,24 +1,34 @@
 package main
 
 import (
-	"github.com/your-username/gopher-social-ecom/pkg/config"
-	"github.com/your-username/gopher-social-ecom/pkg/utils"
 	"log"
+
+	"github.com/No2004LTC/gopher-social-ecom/config"
+	"github.com/No2004LTC/gopher-social-ecom/pkg/utils"
 )
 
 func main() {
-	// 1. Load configuration from .env
+	log.Println("--- Starting Gopher-Social-Ecom App ---")
+
+	// 1. Load cấu hình từ file .env
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("Could not load config: %v", err)
+		log.Fatalf("❌ Không thể load config: %v", err)
 	}
+	log.Println("✅ Cấu hình hệ thống: OK")
 
-	// 2. Connect to Database (Postgres)
+	// 2. Kết nối tới Database (Postgres)
 	db, err := utils.ConnectDB(cfg)
 	if err != nil {
-		log.Fatalf("Could not connect to DB: %v", err)
+		log.Fatalf("❌ Kết nối Database thất bại: %v", err)
+	}
+	log.Println("✅ Kết nối Database: THÀNH CÔNG")
+
+	// Kiểm tra xem bảng Users có tồn tại chưa (Nếu bạn đã chạy Task 4 - Migration)
+	if db.Migrator().HasTable("users") {
+		log.Println("✅ Bảng 'users' đã sẵn sàng trong Database.")
 	}
 
-	log.Println("✅ Server initialized successfully!")
-	log.Println("✅ Database connection established!")
+	// Sau này: Khởi tạo Router và chạy Server ở đây...
+	log.Printf("🚀 Server sẽ lắng nghe tại cổng: %s", cfg.AppPort)
 }
