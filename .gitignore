@@ -7,9 +7,10 @@ dist/
 *.dll
 *.so
 *.dylib
-# Các file binary sinh ra khi chạy go build trong các folder cmd
+# Cc file binary sinh ra khi chạy go build trong cc folder cmd
 cmd/api/api
 cmd/migrate/migrate
+
 
 # === Go Specific ===
 vendor/

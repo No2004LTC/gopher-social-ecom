@@ -27,6 +27,9 @@ services:
       - "9000:9000" # API
       - "9001:9001" # Console UI
     command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
 
 volumes:
   pgdata:
+  minio_data:
