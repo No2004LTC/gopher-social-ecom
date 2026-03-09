@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"log"
 
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"gorm.io/gorm"
@@ -57,4 +58,56 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*domain.User, e
 	}
 
 	return &user, nil
+}
+
+// UpdateAvatar cập nhật avatar URL cho user
+func (r *userRepository) UpdateAvatar(ctx context.Context, userID int64, avatarURL string) error {
+	log.Printf("[UpdateAvatar] Updating avatar for user ID: %d, URL: %s\n", userID, avatarURL)
+
+	// Use Save() with partial update - more reliable for GORM
+	user := &domain.User{ID: userID}
+
+	// First check if user exists
+	if err := r.db.WithContext(ctx).First(user, userID).Error; err != nil {
+		log.Printf("[UpdateAvatar] User not found: %v\n", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("no user found with that ID")
+		}
+		return err
+	}
+
+	// Update the avatar URL
+	user.AvatarURL = avatarURL
+	result := r.db.WithContext(ctx).Model(user).Update("avatar_url", avatarURL)
+
+	log.Printf("[UpdateAvatar] GORM Result - RowsAffected: %d, Error: %v\n", result.RowsAffected, result.Error)
+
+	if result.Error != nil {
+		log.Printf("[UpdateAvatar] ERROR: %v\n", result.Error)
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		log.Printf("[UpdateAvatar] No rows affected - user ID %d\n", userID)
+		return errors.New("failed to update user avatar")
+	}
+
+	log.Printf("[UpdateAvatar] Successfully updated avatar for user ID: %d\n", userID)
+	return nil
+}
+
+// update thong tin profile user
+func (r *userRepository) Update(ctx context.Context, user *domain.User) error {
+	//Cac truong duoc select
+	result := r.db.WithContext(ctx).Model(user).Select("username", "UpdatedAt").Updates(user)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("Khong tim thay user de cap nhat")
+	}
+
+	return nil
 }

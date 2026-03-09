@@ -55,6 +55,8 @@ func main() {
 			protected := v1Group.Group("/users")
 			protected.Use(middleware.AuthMiddleware(cfg.JWTSecret)) // <-- "Anh bảo vệ" ở đây
 			{
+				protected.GET("/me", authHandler.GetMe)
+				protected.PATCH("/profile", authHandler.UpdateProfile)
 				protected.POST("/avatar", authHandler.UploadAvatar) // API upload ảnh
 			}
 		}

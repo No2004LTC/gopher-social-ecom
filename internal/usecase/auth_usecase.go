@@ -79,3 +79,43 @@ func (u *authUsecase) Login(ctx context.Context, email, password string) (string
 
 	return token, nil
 }
+
+func (u *authUsecase) UpdateAvatar(ctx context.Context, userID int64, url string) error {
+	// 1. Validate input
+	if userID <= 0 {
+		return errors.New("invalid user ID")
+	}
+	if url == "" {
+		return errors.New("avatar URL cannot be empty")
+	}
+
+	// 2. Check if user exists
+	user, err := u.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("user not found")
+	}
+
+	// 3. Update avatar in database
+	return u.userRepo.UpdateAvatar(ctx, userID, url)
+}
+
+func (u *authUsecase) GetProfile(ctx context.Context, userID int64) (*domain.User, error) {
+	user, err := u.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	user.PasswordHash = ""
+	return user, nil
+}
+
+func (u *authUsecase) UpdateProfile(ctx context.Context, userID int64, username string) error {
+	user := &domain.User{
+		ID:       userID,
+		Username: username,
+	}
+
+	return u.userRepo.Update(ctx, user)
+}

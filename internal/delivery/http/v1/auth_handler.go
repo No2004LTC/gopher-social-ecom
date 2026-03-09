@@ -2,6 +2,7 @@ package v1
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
@@ -77,19 +78,45 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 	// 1. Lấy userID từ Middleware (Chứng minh đã login)
-	userID, _ := c.Get("user_id")
+	uid, exists := c.Get("user_id")
+	log.Printf("[UploadAvatar] user_id from context: %v (type: %T), exists: %v\n", uid, uid, exists)
+
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var userID int64
+	switch v := uid.(type) {
+	case int64:
+		userID = v
+	case uint32:
+		userID = int64(v)
+		log.Printf("[UploadAvatar] Converted uint32 to int64: %d\n", userID)
+	case uint64:
+		userID = int64(v)
+		log.Printf("[UploadAvatar] Converted uint64 to int64: %d\n", userID)
+	case float64:
+		userID = int64(v)
+		log.Printf("[UploadAvatar] Converted float64 to int64: %d\n", userID)
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID type"})
+		return
+	}
+
+	log.Printf("[UploadAvatar] Final userID: %d\n", userID)
 
 	// 2. Nhận file từ form-data (key là "avatar")
 	file, err := c.FormFile("avatar")
 	if err != nil {
-		c.JSON(400, gin.H{"error": "Không tìm thấy file"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File not found"})
 		return
 	}
 
 	// 3. Mở file và đẩy lên MinIO
 	f, err := file.Open()
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Không thể mở file: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot open file: " + err.Error()})
 		return
 	}
 	defer func() { _ = f.Close() }()
@@ -100,15 +127,60 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Lỗi upload: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Upload failed: " + err.Error()})
 		return
 	}
 
-	// 4. Trả về URL (Vì đã set public nên link này sẽ xem được luôn)
+	// 4. Tạo URL công khai
 	url := fmt.Sprintf("http://%s/%s/%s", h.s3Client.Endpoint(), h.s3Client.Bucket(), objectName)
-	c.JSON(200, gin.H{
-		"message": "Upload thành công",
+
+	// 5. Lưu vào DB thông qua usecase
+	log.Printf("[UploadAvatar] Calling UpdateAvatar with userID: %d, url: %s\n", userID, url)
+	if err := h.authUsecase.UpdateAvatar(c.Request.Context(), userID, url); err != nil {
+		log.Printf("[UploadAvatar] UpdateAvatar error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database update failed: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Avatar updated successfully",
 		"url":     url,
 		"user_id": userID,
 	})
+}
+
+// [GET] /api/v1/users/me -> Xem profile
+func (h *AuthHandler) GetMe(c *gin.Context) {
+	// Lấy userID từ Middleware (phải khớp kiểu dữ liệu int64)
+	uid, _ := c.Get("user_id")
+	userID := uid.(int64)
+
+	user, err := h.authUsecase.GetProfile(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "Không tìm thấy user"})
+		return
+	}
+	// Xóa password trước khi trả về
+	user.PasswordHash = ""
+	c.JSON(200, user)
+}
+
+// [PATCH] /api/v1/users/profile -> Cập nhật tên
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	var input struct {
+		Username string `json:"username" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	uid, _ := c.Get("user_id")
+	userID := uid.(int64)
+
+	if err := h.authUsecase.UpdateProfile(c.Request.Context(), userID, input.Username); err != nil {
+		c.JSON(500, gin.H{"error": "Cập nhật thất bại"})
+		return
+	}
+	c.JSON(200, gin.H{"message": "Cập nhật thành công"})
 }

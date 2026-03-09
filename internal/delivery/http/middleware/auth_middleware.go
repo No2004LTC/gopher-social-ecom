@@ -1,10 +1,12 @@
 package middleware
 
 import (
-	"github.com/No2004LTC/gopher-social-ecom/pkg/utils"
-	"github.com/gin-gonic/gin"
+	"log"
 	"net/http"
 	"strings"
+
+	"github.com/No2004LTC/gopher-social-ecom/pkg/utils"
+	"github.com/gin-gonic/gin"
 )
 
 func AuthMiddleware(secret string) gin.HandlerFunc {
@@ -24,6 +26,7 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token lỏ hoặc hết hạn"})
 			return
 		}
+		log.Printf("[AuthMiddleware] Extracted userID: %d (type: %T)\n", userID, userID)
 		c.Set("user_id", userID)
 		c.Next()
 	}
