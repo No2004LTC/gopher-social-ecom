@@ -1,4 +1,4 @@
-package utils
+package auth
 
 import (
 	"crypto/rand"
@@ -11,11 +11,13 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
+// Khởi tạo các lỗi có thể gặp phải để dùng nhiều lần
 var (
 	ErrInvalidHash         = errors.New("định dạng hash không hợp lệ")
 	ErrIncompatibleVersion = errors.New("phiên bản argon2 không tương thích")
 )
 
+// params struct chứa các thông số cấu hình cho thuật toán Argon2id
 type params struct {
 	memory      uint32
 	iterations  uint32
@@ -24,7 +26,7 @@ type params struct {
 	keyLength   uint32
 }
 
-// Thông số chuẩn theo khuyến nghị của OWASP
+// Thông số chuẩn theo khuyến nghị của OWASP, p là biến toàn cục giữ giá trị mặc định dùng cho cả HashPassword và ComparePassword để đảm bảo nhất quán
 var p = &params{
 	memory:      64 * 1024, // 64MB
 	iterations:  3,
@@ -54,7 +56,7 @@ func HashPassword(password string) (string, error) {
 
 // ComparePassword so sánh mật khẩu nhập vào với chuỗi hash trong DB
 func ComparePassword(password, encodedHash string) (bool, error) {
-	vals := strings.Split(encodedHash, "$")
+	vals := strings.Split(encodedHash, "$") // tách chuỗi bằng strings.Spli
 	if len(vals) != 6 {
 		return false, ErrInvalidHash
 	}

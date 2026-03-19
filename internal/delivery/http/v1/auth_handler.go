@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
-	"github.com/No2004LTC/gopher-social-ecom/pkg/utils"
+	"github.com/No2004LTC/gopher-social-ecom/pkg/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
 )
@@ -15,11 +15,11 @@ import (
 type AuthHandler struct {
 	authUsecase domain.UserUsecase
 	// s3Client là wrapper cho MinIO client để upload file
-	s3Client *utils.S3Client
+	s3Client *storage.S3Client
 }
 
 // ham khoi tao
-func NewAuthHandler(u domain.UserUsecase, s3 *utils.S3Client) *AuthHandler {
+func NewAuthHandler(u domain.UserUsecase, s3 *storage.S3Client) *AuthHandler {
 	return &AuthHandler{authUsecase: u, s3Client: s3}
 }
 

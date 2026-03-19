@@ -7,7 +7,7 @@ import (
 
 	"github.com/No2004LTC/gopher-social-ecom/config"
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
-	"github.com/No2004LTC/gopher-social-ecom/pkg/utils"
+	"github.com/No2004LTC/gopher-social-ecom/pkg/auth"
 )
 
 type authUsecase struct {
@@ -35,7 +35,7 @@ func (u *authUsecase) Register(ctx context.Context, username, email, password st
 	}
 
 	// 2. Hash mật khẩu bằng Argon2 (Sử dụng công cụ ở Task 2)
-	hashedPassword, err := utils.HashPassword(password)
+	hashedPassword, err := auth.HashPassword(password)
 	if err != nil {
 		return err
 	}
@@ -65,14 +65,14 @@ func (u *authUsecase) Login(ctx context.Context, email, password string) (string
 	}
 
 	// 2. So sánh mật khẩu (Sử dụng công cụ ở Task 2)
-	match, err := utils.ComparePassword(password, user.PasswordHash)
+	match, err := auth.ComparePassword(password, user.PasswordHash)
 	if err != nil || !match {
 		return "", errors.New("thông tin đăng nhập không chính xác")
 	}
 
 	// 3. Tạo JWT Token (Sử dụng công cụ ở Task 2)
 	expiry, _ := time.ParseDuration(u.cfg.JWTExpiry)
-	token, err := utils.GenerateToken(user.ID, u.cfg.JWTSecret, expiry)
+	token, err := auth.GenerateToken(user.ID, u.cfg.JWTSecret, expiry)
 	if err != nil {
 		return "", err
 	}

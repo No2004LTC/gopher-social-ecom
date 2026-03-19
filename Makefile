@@ -1,43 +1,60 @@
-# Đọc biến môi trường từ .env
-include .env
-export
+# 1. Load biến môi trường từ .env
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
 
-# Định nghĩa các đường dẫn chính
+# 2. Định nghĩa biến
 API_ENTRY = cmd/api/main.go
 MIGRATE_ENTRY = cmd/migrate/main.go
 MIGRATION_DIR = migrations/sql
 
-# 1. Hạ tầng (Infrastructure) - Sử dụng Docker Compose V2
+# Infrastructure
+#Bật container
 up:
 	docker compose up -d
 
+#Tắt container
 down:
 	docker compose down
 
-# 2. Phát triển (Development)
+# import thêm các thư viện cần vào go.mod
 tidy:
 	go mod tidy
 
-# Chạy Server API
+#Chạy
 run: tidy
 	go run $(API_ENTRY)
 
-# 3. Migration (Học tập style của công ty bạn)
-# Chạy migration bằng chính code Go chúng ta vừa viết
-migrate: tidy
-	go run $(MIGRATE_ENTRY)
+# 3. Migration (Sửa lại để truyền tham số vào code Go)
+# Chạy toàn bộ các file .up.sql chưa thực thi
+migrate-up: tidy
+	go run $(MIGRATE_ENTRY) up
 
-# Tạo file migration mới với timestamp chuẩn xác
+# Tắt 1 bảng gần nhất ( file .down.sql gần nhất)
+migrate-down: tidy
+	go run $(MIGRATE_ENTRY) down
+
+# Xóa sạch tất cả các bảng đã tạo (chạy tất cả file .down.sql)
+migrate-drop: tidy
+	go run $(MIGRATE_ENTRY) drop
+
+# Dọn sạch và tạo lại từ đầu chỉ với 1 lệnh
+db-reset:
+	go run $(MIGRATE_ENTRY) drop
+	go run $(MIGRATE_ENTRY) up
+
+# Tạo file migration mới
 new-migration:
-	@read -p "Nhập tên migration (VD: create_users_table): " desc; \
+	@read -p "Nhập tên migration: " desc; \
 	timestamp=$$(date +%Y%m%d%H%M%S); \
+	mkdir -p $(MIGRATION_DIR); \
 	touch $(MIGRATION_DIR)/$${timestamp}_$${desc}.up.sql; \
 	touch $(MIGRATION_DIR)/$${timestamp}_$${desc}.down.sql; \
 	echo "-- Migration: $${desc}" >> $(MIGRATION_DIR)/$${timestamp}_$${desc}.up.sql; \
 	echo "✅ Đã tạo: $(MIGRATION_DIR)/$${timestamp}_$${desc}.up.sql"
 
-# 4. Kiểm thử (Testing)
 test: tidy
 	go test -v -cover ./...
 
-.PHONY: up down tidy run migrate new-migration test
+.PHONY: up down tidy run db-reset migrate-up migrate-down migrate-drop migrate-force new-migration test
