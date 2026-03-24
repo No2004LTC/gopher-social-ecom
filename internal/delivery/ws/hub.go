@@ -13,6 +13,7 @@ type Hub struct {
 	Clients        sync.Map
 	Broadcast      chan []byte
 	PrivateMessage chan domain.Message
+	Notifications  chan domain.Notification
 	Register       chan *Client // Thêm cái này
 	Unregister     chan *Client // Và cái này
 	ChatUC         domain.ChatUsecase
@@ -24,7 +25,18 @@ func NewHub(chatUC domain.ChatUsecase) *Hub {
 		PrivateMessage: make(chan domain.Message),
 		Register:       make(chan *Client), // Khởi tạo
 		Unregister:     make(chan *Client), // Khởi tạo
+		Notifications:  make(chan domain.Notification, 100),
 		ChatUC:         chatUC,
+	}
+}
+
+func (h *Hub) BroadcastNotification(noti domain.Notification) {
+	// Dùng select với default để nếu channel đầy thì cũng không làm treo App
+	select {
+	case h.Notifications <- noti:
+		// Gửi thành công vào hàng chờ
+	default:
+		log.Printf("Cảnh báo: Hàng chờ thông báo đã đầy, bỏ qua thông báo cho User %d", noti.UserID)
 	}
 }
 
@@ -74,6 +86,20 @@ func (h *Hub) Run() {
 				client.Send <- message
 				return true
 			})
+		case noti := <-h.Notifications:
+			if val, ok := h.Clients.Load(noti.UserID); ok {
+				client := val.(*Client)
+				// Gói lại thành một chuẩn JSON để Frontend dễ phân biệt với tin nhắn chat
+				payload, _ := json.Marshal(map[string]interface{}{
+					"type": "NOTIFICATION",
+					"data": noti,
+				})
+				select {
+				case client.Send <- payload:
+				default:
+					log.Printf("Không thể gửi thông báo cho User %d, hàng chờ của client đã đầy", noti.UserID)
+				}
+			}
 		}
 	}
 }

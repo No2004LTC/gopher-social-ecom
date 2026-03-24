@@ -77,7 +77,7 @@ func main() {
 			postHandler := v1.NewPostHandler(postUC)
 
 			interRepo := postgres.NewInteractionRepository(db)
-			interUC := usecase.NewInteractionUsecase(interRepo)
+			interUC := usecase.NewInteractionUsecase(interRepo, hub)
 			interHandler := v1.NewInteractionHandler(interUC)
 
 			postGroup := v1Group.Group("/posts")

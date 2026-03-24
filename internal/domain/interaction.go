@@ -29,6 +29,8 @@ type InteractionRepository interface {
 	// Comment logic
 	CreateComment(ctx context.Context, comment *Comment) error
 	GetCommentsByPostID(ctx context.Context, postID int64) ([]Comment, error)
+
+	GetPostOwner(ctx context.Context, postID int64) int64 //
 }
 
 type InteractionUsecase interface {

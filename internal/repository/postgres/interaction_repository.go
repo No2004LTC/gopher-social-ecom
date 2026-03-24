@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"errors"
+	"log"
+
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"gorm.io/gorm"
 )
@@ -55,4 +57,17 @@ func (r *interactionRepository) GetCommentsByPostID(ctx context.Context, postID 
 		Order("created_at asc").
 		Find(&comments).Error
 	return comments, err
+}
+
+func (r *interactionRepository) GetPostOwner(ctx context.Context, postID int64) int64 {
+	var post struct {
+		UserID int64 `gorm:"column:user_id"` // Chỉ định rõ cột
+	}
+	// Dùng bảng posts
+	err := r.db.WithContext(ctx).Table("posts").Select("user_id").Where("id = ?", postID).First(&post).Error
+	if err != nil {
+		log.Printf("Lỗi GetPostOwner: %v", err)
+		return 0
+	}
+	return post.UserID
 }
