@@ -9,14 +9,20 @@ import (
 )
 
 type postUsecase struct {
-	repo    domain.PostRepository
-	storage *storage.S3Client
+	postRepo   domain.PostRepository
+	followRepo domain.FollowRepository
+	storage    *storage.S3Client
 }
 
-func NewPostUsecase(repo domain.PostRepository, storage *storage.S3Client) domain.PostUsecase {
+func NewPostUsecase(
+	postRepo domain.PostRepository,
+	followRepo domain.FollowRepository, // <--- Thêm tham số này
+	storage *storage.S3Client,
+) domain.PostUsecase {
 	return &postUsecase{
-		repo:    repo,
-		storage: storage,
+		postRepo:   postRepo,
+		followRepo: followRepo,
+		storage:    storage,
 	}
 }
 
@@ -28,11 +34,32 @@ func (u *postUsecase) CreatePost(ctx context.Context, post *domain.Post, file *m
 		}
 		post.ImageURL = url
 	}
-	return u.repo.Create(ctx, post)
+	return u.postRepo.Create(ctx, post)
 }
 
 func (u *postUsecase) GetFeed(ctx context.Context, page, limit int, currentUserID int64) ([]domain.Post, error) {
 	offset := (page - 1) * limit
 	// Chuyền currentUserID xuống đây
-	return u.repo.GetList(ctx, offset, limit, currentUserID)
+	return u.postRepo.GetList(ctx, offset, limit, currentUserID)
+}
+
+func (u *postUsecase) GetPersonalizedFeed(ctx context.Context, userID int64, page int) ([]domain.Post, error) {
+	limit := 10
+	offset := (page - 1) * limit
+
+	// 1. Lấy danh sách ID những người mình đang follow
+	followingIDs, err := u.followRepo.GetFollowingIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Nếu chưa follow ai, có thể gợi ý bài viết của chính mình hoặc bài viết mới nhất toàn sàn
+	if len(followingIDs) == 0 {
+		followingIDs = []int64{userID} // Tạm thời chỉ xem bài của chính mình
+	} else {
+		followingIDs = append(followingIDs, userID) // Xem bài của người mình follow + bài của mình
+	}
+
+	// 3. Lấy bài viết từ DB
+	return u.postRepo.GetNewsfeed(ctx, followingIDs, limit, offset)
 }

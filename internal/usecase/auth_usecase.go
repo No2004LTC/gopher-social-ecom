@@ -119,3 +119,12 @@ func (u *authUsecase) UpdateProfile(ctx context.Context, userID int64, username 
 
 	return u.userRepo.Update(ctx, user)
 }
+
+func (u *authUsecase) SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]domain.User, error) {
+	if query == "" {
+		return []domain.User{}, nil
+	}
+
+	// Truyền đủ 5 tham số xuống cho Repo
+	return u.userRepo.SearchUsers(ctx, currentUserID, query, limit, offset)
+}

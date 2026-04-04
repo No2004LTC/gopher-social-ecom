@@ -14,6 +14,8 @@ type User struct {
 	AvatarURL    string    `gorm:"column:avatar_url" json:"avatar_url"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	// -> để GORM cho phép "đọc" từ DB vào nhưng không "ghi" xuống DB
+	IsFollowing bool `json:"is_following" gorm:"->"`
 }
 
 // UserRepository - Hợp đồng cho tầng lưu trữ dữ liệu
@@ -23,6 +25,7 @@ type UserRepository interface {
 	GetByID(ctx context.Context, id int64) (*User, error)
 	UpdateAvatar(ctx context.Context, userID int64, avatarURL string) error
 	Update(ctx context.Context, user *User) error
+	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]User, error)
 }
 
 // UserUsecase - Hợp đồng cho tầng xử lý nghiệp vụ
@@ -32,4 +35,5 @@ type UserUsecase interface {
 	UpdateAvatar(ctx context.Context, userID int64, avatarURL string) error
 	GetProfile(ctx context.Context, userID int64) (*User, error)
 	UpdateProfile(ctx context.Context, userID int64, username string) error
+	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]User, error)
 }

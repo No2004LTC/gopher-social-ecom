@@ -49,3 +49,15 @@ func (r *postRepository) GetList(ctx context.Context, offset, limit int, current
 
 	return posts, nil
 }
+
+func (r *postRepository) GetNewsfeed(ctx context.Context, followingIDs []int64, limit, offset int) ([]domain.Post, error) {
+	var posts []domain.Post
+	err := r.db.WithContext(ctx).
+		Preload("User"). // Để hiển thị tên tác giả bài viết
+		Where("user_id IN ?", followingIDs).
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&posts).Error
+	return posts, err
+}

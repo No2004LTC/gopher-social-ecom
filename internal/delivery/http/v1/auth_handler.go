@@ -184,3 +184,18 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{"message": "Cập nhật thành công"})
 }
+
+func (h *AuthHandler) SearchUsers(c *gin.Context) {
+	query := c.Query("q")
+	currentUserID := c.MustGet("user_id").(int64)
+
+	// Ở đây ta tạm thời fix cứng limit=10, offset=0
+	// Sau này bạn có thể lấy từ c.Query("limit") nếu muốn
+	users, err := h.authUsecase.SearchUsers(c.Request.Context(), currentUserID, query, 10, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
+}

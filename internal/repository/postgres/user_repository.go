@@ -111,3 +111,25 @@ func (r *userRepository) Update(ctx context.Context, user *domain.User) error {
 
 	return nil
 }
+
+func (r *userRepository) SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]domain.User, error) {
+	var users []domain.User
+
+	// Câu SQL "ma thuật":
+	// Chọn tất cả các cột của bảng users
+	// Thêm một cột tính toán: kiểm tra xem cặp (currentUserID, user.id) có trong bảng follows không
+	selectQuery := `users.*, 
+        EXISTS (
+            SELECT 1 FROM follows 
+            WHERE follower_id = ? AND following_id = users.id
+        ) as is_following`
+
+	err := r.db.WithContext(ctx).
+		Select(selectQuery, currentUserID). // Truyền currentUserID vào đây
+		Where("(username ILIKE ? OR email ILIKE ?) AND id <> ?", "%"+query+"%", "%"+query+"%", currentUserID).
+		Limit(limit).
+		Offset(offset).
+		Find(&users).Error
+
+	return users, err
+}

@@ -34,6 +34,10 @@ func main() {
 	wsHandler := v1.NewWSHandler(hub, chatUC)
 	// -------------------------------------
 
+	followRepo := postgres.NewFollowRepository(db)
+	followUC := usecase.NewFollowUsecase(followRepo, hub)
+	followHandler := v1.NewFollowHandler(followUC)
+
 	userRepo := postgres.NewUserRepository(db)
 	authUsecase := usecase.NewAuthUsecase(userRepo, cfg)
 
@@ -70,10 +74,13 @@ func main() {
 			{
 				protected.GET("/me", authHandler.GetMe)
 				protected.POST("/avatar", authHandler.UploadAvatar)
+				protected.POST("/:id/follow", followHandler.Follow)
+				protected.POST("/:id/unfollow", followHandler.Unfollow)
+				protected.GET("/search", authHandler.SearchUsers)
 			}
 
 			postRepo := postgres.NewPostRepository(db)
-			postUC := usecase.NewPostUsecase(postRepo, s3Client)
+			postUC := usecase.NewPostUsecase(postRepo, followRepo, s3Client)
 			postHandler := v1.NewPostHandler(postUC)
 
 			interRepo := postgres.NewInteractionRepository(db)

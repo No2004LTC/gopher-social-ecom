@@ -26,9 +26,11 @@ type Post struct {
 type PostRepository interface {
 	Create(ctx context.Context, post *Post) error
 	GetList(ctx context.Context, offset, limit int, currentUserID int64) ([]Post, error)
+	GetNewsfeed(ctx context.Context, followingIDs []int64, limit, offset int) ([]Post, error)
 }
 
 type PostUsecase interface {
 	CreatePost(ctx context.Context, post *Post, file *multipart.FileHeader) error
 	GetFeed(ctx context.Context, page, limit int, currentUserID int64) ([]Post, error)
+	GetPersonalizedFeed(ctx context.Context, userID int64, page int) ([]Post, error)
 }
