@@ -2,59 +2,52 @@ package usecase
 
 import (
 	"context"
-
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 )
 
-// Interface này giúp usecase gọi được Hub mà không cần import package ws
-type NotificationHub interface {
-	BroadcastNotification(noti domain.Notification)
-}
+// XÓA cái interface NotificationHub ở đây đi vì ta dùng domain.NotificationUsecase rồi
 
 type interactionUsecase struct {
-	repo domain.InteractionRepository
-	hub  NotificationHub
+	repo   domain.InteractionRepository
+	notiUC domain.NotificationUsecase // Dùng cái này đồng bộ
 }
 
-func NewInteractionUsecase(repo domain.InteractionRepository, hub NotificationHub) domain.InteractionUsecase {
+func NewInteractionUsecase(repo domain.InteractionRepository, notiUC domain.NotificationUsecase) domain.InteractionUsecase {
 	return &interactionUsecase{
-		repo: repo,
-		hub:  hub,
+		repo:   repo,
+		notiUC: notiUC,
 	}
 }
 
 func (u *interactionUsecase) ToggleLike(ctx context.Context, userID, postID int64) (bool, error) {
-	// 1. Kiểm tra xem đã like chưa
 	isLiked, err := u.repo.IsLiked(ctx, userID, postID)
 	if err != nil {
 		return false, err
 	}
 
 	if isLiked {
-		// 2. Nếu đã like rồi thì Unlike
 		err = u.repo.UnlikePost(ctx, userID, postID)
 		return false, err
 	}
 
-	// 3. Nếu chưa like thì Like
 	err = u.repo.LikePost(ctx, userID, postID)
 	if err != nil {
 		return false, err
 	}
 
-	// 4. Gửi thông báo real-time
+	// Gửi thông báo real-time khi LIKE
 	ownerID := u.repo.GetPostOwner(ctx, postID)
-	//log.Printf("DEBUG: UserID=%d, OwnerID=%d", userID, ownerID)
-	if userID != ownerID && u.hub != nil {
-		// Chạy ngầm việc gửi thông báo để API Like trả về ngay lập tức
-		go func(n domain.Notification) {
-			u.hub.BroadcastNotification(n)
-		}(domain.Notification{
-			UserID:   ownerID,
-			ActorID:  userID,
-			Type:     "LIKE",
-			EntityID: postID,
-		})
+	if userID != ownerID && u.notiUC != nil {
+		go func() {
+			noti := &domain.Notification{
+				UserID:   ownerID,
+				ActorID:  userID,
+				Type:     "LIKE",
+				EntityID: postID,
+				Message:  "đã thích bài viết của bạn.",
+			}
+			_ = u.notiUC.SendNotification(context.Background(), noti)
+		}()
 	}
 
 	return true, nil
@@ -71,15 +64,19 @@ func (u *interactionUsecase) CommentPost(ctx context.Context, userID, postID int
 		return nil, err
 	}
 
-	// Gửi thông báo cho chủ bài viết khi có comment mới
+	// Gửi thông báo cho chủ bài viết khi có COMMENT mới
 	ownerID := u.repo.GetPostOwner(ctx, postID)
-	if userID != ownerID && u.hub != nil {
-		u.hub.BroadcastNotification(domain.Notification{
-			UserID:   ownerID,
-			ActorID:  userID,
-			Type:     "COMMENT",
-			EntityID: postID,
-		})
+	if userID != ownerID && u.notiUC != nil {
+		go func() {
+			noti := &domain.Notification{
+				UserID:   ownerID,
+				ActorID:  userID,
+				Type:     "COMMENT",
+				EntityID: postID,
+				Message:  "đã bình luận về bài viết của bạn.",
+			}
+			_ = u.notiUC.SendNotification(context.Background(), noti)
+		}()
 	}
 
 	return comment, nil

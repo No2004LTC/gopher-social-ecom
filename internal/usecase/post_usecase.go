@@ -12,17 +12,20 @@ type postUsecase struct {
 	postRepo   domain.PostRepository
 	followRepo domain.FollowRepository
 	storage    *storage.S3Client
+	notiUC     domain.NotificationUsecase
 }
 
 func NewPostUsecase(
 	postRepo domain.PostRepository,
 	followRepo domain.FollowRepository, // <--- Thêm tham số này
 	storage *storage.S3Client,
+	nuc domain.NotificationUsecase,
 ) domain.PostUsecase {
 	return &postUsecase{
 		postRepo:   postRepo,
 		followRepo: followRepo,
 		storage:    storage,
+		notiUC:     nuc,
 	}
 }
 
@@ -43,23 +46,12 @@ func (u *postUsecase) GetFeed(ctx context.Context, page, limit int, currentUserI
 	return u.postRepo.GetList(ctx, offset, limit, currentUserID)
 }
 
-func (u *postUsecase) GetPersonalizedFeed(ctx context.Context, userID int64, page int) ([]domain.Post, error) {
+func (u *postUsecase) GetDiscoveryFeed(ctx context.Context, userID int64, page int) ([]domain.Post, error) {
 	limit := 10
 	offset := (page - 1) * limit
 
-	// 1. Lấy danh sách ID những người mình đang follow
-	followingIDs, err := u.followRepo.GetFollowingIDs(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
+	followingIDs, _ := u.followRepo.GetFollowingIDs(ctx, userID)
 
-	// 2. Nếu chưa follow ai, có thể gợi ý bài viết của chính mình hoặc bài viết mới nhất toàn sàn
-	if len(followingIDs) == 0 {
-		followingIDs = []int64{userID} // Tạm thời chỉ xem bài của chính mình
-	} else {
-		followingIDs = append(followingIDs, userID) // Xem bài của người mình follow + bài của mình
-	}
-
-	// 3. Lấy bài viết từ DB
-	return u.postRepo.GetNewsfeed(ctx, followingIDs, limit, offset)
+	// Gọi xuống Repo
+	return u.postRepo.GetMixedFeed(ctx, userID, followingIDs, limit, offset)
 }

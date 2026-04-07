@@ -27,10 +27,12 @@ type PostRepository interface {
 	Create(ctx context.Context, post *Post) error
 	GetList(ctx context.Context, offset, limit int, currentUserID int64) ([]Post, error)
 	GetNewsfeed(ctx context.Context, followingIDs []int64, limit, offset int) ([]Post, error)
+	GetTrendingPosts(ctx context.Context, limit, offset int) ([]Post, error)
+	GetMixedFeed(ctx context.Context, userID int64, followingIDs []int64, limit, offset int) ([]Post, error)
 }
 
 type PostUsecase interface {
 	CreatePost(ctx context.Context, post *Post, file *multipart.FileHeader) error
 	GetFeed(ctx context.Context, page, limit int, currentUserID int64) ([]Post, error)
-	GetPersonalizedFeed(ctx context.Context, userID int64, page int) ([]Post, error)
+	GetDiscoveryFeed(ctx context.Context, userID int64, page int) ([]Post, error)
 }

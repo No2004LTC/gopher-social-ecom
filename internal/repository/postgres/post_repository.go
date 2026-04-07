@@ -61,3 +61,36 @@ func (r *postRepository) GetNewsfeed(ctx context.Context, followingIDs []int64, 
 		Find(&posts).Error
 	return posts, err
 }
+
+func (r *postRepository) GetTrendingPosts(ctx context.Context, limit, offset int) ([]domain.Post, error) {
+	var posts []domain.Post
+
+	// Query lấy các bài viết có nhiều Like/Comment nhất
+	// Sắp xếp theo tổng lượt tương tác giảm dần
+	err := r.db.WithContext(ctx).
+		Preload("User").
+		Order("(likes_count * 2 + comments_count * 5) DESC, created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&posts).Error
+
+	return posts, err
+}
+
+func (r *postRepository) GetMixedFeed(ctx context.Context, userID int64, followingIDs []int64, limit, offset int) ([]domain.Post, error) {
+	var posts []domain.Post
+
+	// Gộp cả chính mình vào danh sách ưu tiên
+	targetIDs := append(followingIDs, userID)
+
+	err := r.db.WithContext(ctx).
+		Preload("User").
+		// Ưu tiên bài của người quen trước (CASE WHEN), sau đó đến điểm Hot (Like*2 + Comment*5)
+		Order(r.db.Raw("CASE WHEN user_id IN (?) THEN 0 ELSE 1 END", targetIDs)).
+		Order("(likes_count * 2 + comments_count * 5) DESC"). // Cột đã tồn tại nên chạy rất mượt
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&posts).Error
+
+	return posts, err
+}
