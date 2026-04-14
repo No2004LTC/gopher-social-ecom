@@ -3,9 +3,11 @@ package domain
 import (
 	"context"
 	"time"
+
+	"github.com/No2004LTC/gopher-social-ecom/internal/dto"
 )
 
-// User thực thể người dùng
+// User (model)
 type User struct {
 	ID           int64     `gorm:"primaryKey" json:"id"`
 	Username     string    `gorm:"column:username" json:"username"`
@@ -18,22 +20,27 @@ type User struct {
 	IsFollowing bool `json:"is_following" gorm:"->"`
 }
 
-// UserRepository - Hợp đồng cho tầng lưu trữ dữ liệu
+// UserRepository (Các hàm tôi tạo để truy vấn)
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	GetByEmail(ctx context.Context, email string) (*User, error)
+	GetUserByIdentifier(ctx context.Context, identifier string) (*User, error)
 	GetByID(ctx context.Context, id int64) (*User, error)
 	UpdateAvatar(ctx context.Context, userID int64, avatarURL string) error
 	Update(ctx context.Context, user *User) error
-	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]User, error)
+	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]dto.UserCompact, error)
+	GetFollowing(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
+	GetFollowers(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
 }
 
-// UserUsecase - Hợp đồng cho tầng xử lý nghiệp vụ
+// UserUsecase (Chứa business logic)
 type UserUsecase interface {
 	Register(ctx context.Context, username, email, password string) error
-	Login(ctx context.Context, email, password string) (string, error) // Trả về JWT Token
+	Login(ctx context.Context, identifier, password string) (string, *User, error) // Trả về JWT Token
 	UpdateAvatar(ctx context.Context, userID int64, avatarURL string) error
 	GetProfile(ctx context.Context, userID int64) (*User, error)
 	UpdateProfile(ctx context.Context, userID int64, username string) error
-	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]User, error)
+	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]dto.UserCompact, error)
+	GetFollowing(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
+	GetFollowers(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
 }

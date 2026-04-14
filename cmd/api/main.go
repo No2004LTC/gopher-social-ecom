@@ -11,6 +11,7 @@ import (
 	"github.com/No2004LTC/gopher-social-ecom/internal/usecase"
 	"github.com/No2004LTC/gopher-social-ecom/pkg/db"
 	"github.com/No2004LTC/gopher-social-ecom/pkg/storage"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -56,7 +57,7 @@ func main() {
 
 	postRepo := postgres.NewPostRepository(db)
 	// PostUsecase giờ nhận thêm notiUC để báo "Có bài mới" cho follower
-	postUC := usecase.NewPostUsecase(postRepo, followRepo, s3Client, notiUC)
+	postUC := usecase.NewPostUsecase(postRepo, s3Client, notiUC)
 	postHandler := v1.NewPostHandler(postUC)
 
 	interRepo := postgres.NewInteractionRepository(db)
@@ -64,8 +65,21 @@ func main() {
 	interUC := usecase.NewInteractionUsecase(interRepo, notiUC)
 	interHandler := v1.NewInteractionHandler(interUC)
 
+	bookmarkRepo := postgres.NewBookmarkRepository(db)
+	bookmarkUC := usecase.NewBookmarkUseCase(bookmarkRepo)
+	bookmarkHandler := v1.NewBookmarkHandler(bookmarkUC)
+
 	// --- 4. KHỞI TẠO ROUTER ---
 	r := gin.Default()
+
+	// CẤU HÌNH CORS ĐÃ ĐƯỢC FIX LỖI "Failed to fetch"
+	r.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"http://localhost:5173"}, // URL của React
+		// 👉 ĐÃ BỔ SUNG "PATCH" VÀ "DELETE" VÀO DÒNG DƯỚI ĐÂY:
+		AllowMethods:     []string{"POST", "GET", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
 
 	api := r.Group("/api")
 	{
@@ -91,6 +105,9 @@ func main() {
 				users.PATCH("/profile", authHandler.UpdateProfile)
 				users.POST("/avatar", authHandler.UploadAvatar)
 
+				users.GET("/following", authHandler.GetFollowing)
+				users.GET("/followers", authHandler.GetFollowers)
+
 				users.POST("/:id/follow", followHandler.Follow)
 				users.POST("/:id/unfollow", followHandler.Unfollow)
 			}
@@ -99,12 +116,38 @@ func main() {
 			posts := v1Group.Group("/posts")
 			posts.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 			{
+				// --- 1. LẤY DỮ LIỆU (READ) ---
+				// Trang chủ: Hiện tất cả bài viết của mọi người
+				posts.GET("/feed", postHandler.GetGlobalFeed)
+
+				// Trang cá nhân: Hiện bài viết của 1 User cụ thể (của mình hoặc người khác)
+				posts.GET("/user/:user_id", postHandler.GetUserPosts)
+
+				// --- 2. THAO TÁC BÀI VIẾT (C.U.D) ---
 				posts.POST("", postHandler.Create)
-				posts.GET("", postHandler.GetNewsfeed)
-				posts.GET("/discovery", postHandler.GetDiscoveryFeed) // API Discovery mình vừa làm
+				posts.PUT("/:id", postHandler.UpdatePost)
+				posts.DELETE("/:id", postHandler.DeletePost)
+
+				// --- 3. TÀI NGUYÊN CON (Comments, Likes, Bookmarks) ---
+
+				// Likes & Saves
 				posts.POST("/:id/like", interHandler.ToggleLike)
-				posts.POST("/:id/comments", interHandler.AddComment)
-				posts.GET("/:id/comments", interHandler.GetComments)
+				posts.POST("/:id/save", bookmarkHandler.ToggleSave)
+
+				// Comments (Chuẩn REST)
+				posts.GET("/:id/comments", interHandler.GetComments) // Lấy list cmt của post
+				posts.POST("/:id/comments", interHandler.AddComment) // Thêm cmt vào post
+
+				// Sửa/Xóa cmt: Dùng comment_id để định danh chính xác
+				posts.PUT("/:id/comments/:comment_id", interHandler.UpdateComment)
+				posts.DELETE("/:id/comments/:comment_id", interHandler.DeleteComment)
+			}
+
+			bookmarks := v1Group.Group("/bookmarks")
+			bookmarks.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+			{
+				// 👉 API XEM DANH SÁCH ĐÃ LƯU
+				bookmarks.GET("", bookmarkHandler.GetSavedFeed)
 			}
 
 			// Notification Routes (Mới thêm)
@@ -112,7 +155,7 @@ func main() {
 			notifications.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 			{
 				notifications.GET("", notiHandler.GetNotifications)
-				notifications.PATCH("/:id/read", notiHandler.MarkAsRead)
+				notifications.PUT("/:id/read", notiHandler.MarkAsRead)
 			}
 		}
 	}

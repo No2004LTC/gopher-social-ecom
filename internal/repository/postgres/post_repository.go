@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"gorm.io/gorm"
@@ -15,81 +17,75 @@ func NewPostRepository(db *gorm.DB) domain.PostRepository {
 	return &postRepository{db: db}
 }
 
+// CREATE - Tạo bài viết mới
 func (r *postRepository) Create(ctx context.Context, post *domain.Post) error {
 	return r.db.WithContext(ctx).Create(post).Error
 }
 
-func (r *postRepository) GetList(ctx context.Context, offset, limit int, currentUserID int64) ([]domain.Post, error) {
-	var posts []domain.Post
+// DELETE - Xóa bài viết (Chỉ chủ bài viết mới có quyền)
+func (r *postRepository) DeletePost(ctx context.Context, postID int64, currentUserID int64) error {
+	result := r.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", postID, currentUserID).
+		Delete(&domain.Post{})
 
-	err := r.db.WithContext(ctx).
-		Preload("User").
-		Order("created_at desc").
-		Limit(limit).
-		Offset(offset).
-		Find(&posts).Error
-
-	if err != nil {
-		return nil, err
+	if result.Error != nil {
+		return result.Error
 	}
-
-	// Với mỗi bài post, ta đếm Like và Comment
-	for i := range posts {
-		// 1. Đếm Like
-		r.db.Model(&domain.Like{}).Where("post_id = ?", posts[i].ID).Count(&posts[i].LikesCount)
-
-		// 2. Đếm Comment
-		r.db.Model(&domain.Comment{}).Where("post_id = ?", posts[i].ID).Count(&posts[i].CommentsCount)
-
-		// 3. Kiểm tra User hiện tại đã Like chưa
-		var count int64
-		r.db.Model(&domain.Like{}).Where("post_id = ? AND user_id = ?", posts[i].ID, currentUserID).Count(&count)
-		posts[i].IsLiked = count > 0
+	if result.RowsAffected == 0 {
+		return errors.New("không tìm thấy bài viết hoặc bạn không có quyền xóa")
 	}
-
-	return posts, nil
+	return nil
 }
 
-func (r *postRepository) GetNewsfeed(ctx context.Context, followingIDs []int64, limit, offset int) ([]domain.Post, error) {
-	var posts []domain.Post
-	err := r.db.WithContext(ctx).
-		Preload("User"). // Để hiển thị tên tác giả bài viết
-		Where("user_id IN ?", followingIDs).
+// UPDATE - Sửa nội dung bài viết
+func (r *postRepository) UpdatePost(ctx context.Context, postID int64, currentUserID int64, newContent string) error {
+	result := r.db.WithContext(ctx).Model(&domain.Post{}).
+		Where("id = ? AND user_id = ?", postID, currentUserID).
+		Updates(map[string]interface{}{
+			"content":    newContent,
+			"updated_at": time.Now(),
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("không tìm thấy bài viết hoặc bạn không có quyền sửa")
+	}
+	return nil
+}
+
+/*
+🎯 HÀM QUAN TRỌNG NHẤT: GetPosts
+
+	Hàm này thay thế cho toàn bộ GetList, GetNewsfeed, GetDiscovery...
+	- Nếu targetUserID = 0: Lấy tất cả bài viết trên hệ thống (Trang chủ)
+	- Nếu targetUserID > 0: Lấy bài viết của User cụ thể (Trang cá nhân/Profile người khác)
+*/
+func (r *postRepository) GetPosts(ctx context.Context, currentUserID int64, targetUserID int64, limit, offset int) ([]domain.Post, error) {
+	// Khởi tạo mảng rỗng để JSON trả về [] thay vì null nếu không có bài viết
+	posts := make([]domain.Post, 0)
+
+	query := r.db.WithContext(ctx).Model(&domain.Post{})
+
+	// Filter: Nếu xem Profile (của mình hoặc người khác) thì lọc theo user_id
+	if targetUserID > 0 {
+		query = query.Where("user_id = ?", targetUserID)
+	}
+
+	err := query.
+		Select(`
+          posts.*,
+          (SELECT COUNT(*) FROM likes WHERE likes.post_id = posts.id) AS likes_count,
+          (SELECT COUNT(*) FROM comments WHERE comments.post_id = posts.id) AS comments_count,
+          -- Kiểm tra trạng thái của User đang lướt (currentUserID) với bài viết
+          (EXISTS (SELECT 1 FROM likes WHERE likes.post_id = posts.id AND likes.user_id = ?)) AS is_liked,
+          (EXISTS (SELECT 1 FROM bookmarks WHERE bookmarks.post_id = posts.id AND bookmarks.user_id = ?)) AS is_saved
+       `, currentUserID, currentUserID).
+		Preload("User"). // Load thông tin tác giả bài viết
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
-		Find(&posts).Error
-	return posts, err
-}
-
-func (r *postRepository) GetTrendingPosts(ctx context.Context, limit, offset int) ([]domain.Post, error) {
-	var posts []domain.Post
-
-	// Query lấy các bài viết có nhiều Like/Comment nhất
-	// Sắp xếp theo tổng lượt tương tác giảm dần
-	err := r.db.WithContext(ctx).
-		Preload("User").
-		Order("(likes_count * 2 + comments_count * 5) DESC, created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Find(&posts).Error
-
-	return posts, err
-}
-
-func (r *postRepository) GetMixedFeed(ctx context.Context, userID int64, followingIDs []int64, limit, offset int) ([]domain.Post, error) {
-	var posts []domain.Post
-
-	// Gộp cả chính mình vào danh sách ưu tiên
-	targetIDs := append(followingIDs, userID)
-
-	err := r.db.WithContext(ctx).
-		Preload("User").
-		// Ưu tiên bài của người quen trước (CASE WHEN), sau đó đến điểm Hot (Like*2 + Comment*5)
-		Order(r.db.Raw("CASE WHEN user_id IN (?) THEN 0 ELSE 1 END", targetIDs)).
-		Order("(likes_count * 2 + comments_count * 5) DESC"). // Cột đã tồn tại nên chạy rất mượt
-		Order("created_at DESC").
-		Limit(limit).Offset(offset).
 		Find(&posts).Error
 
 	return posts, err

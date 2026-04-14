@@ -7,9 +7,11 @@ import (
 
 	"github.com/No2004LTC/gopher-social-ecom/config"
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
+	"github.com/No2004LTC/gopher-social-ecom/internal/dto"
 	"github.com/No2004LTC/gopher-social-ecom/pkg/auth"
 )
 
+// Struct dùng các hàm trong UserRepository và load config
 type authUsecase struct {
 	userRepo domain.UserRepository
 	cfg      *config.Config
@@ -25,7 +27,7 @@ func NewAuthUsecase(repo domain.UserRepository, cfg *config.Config) domain.UserU
 
 // Register xử lý logic Đăng ký tài khoản
 func (u *authUsecase) Register(ctx context.Context, username, email, password string) error {
-	// 1. Kiểm tra xem email đã tồn tại chưa
+	// Kiểm tra xem email đã tồn tại chưa
 	existingUser, err := u.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		return err
@@ -34,7 +36,7 @@ func (u *authUsecase) Register(ctx context.Context, username, email, password st
 		return errors.New("email đã được sử dụng")
 	}
 
-	// 2. Hash mật khẩu bằng Argon2 (Sử dụng công cụ ở Task 2)
+	// Hash mật khẩu bằng Argon2 (Sử dụng công cụ ở Task 2)
 	hashedPassword, err := auth.HashPassword(password)
 	if err != nil {
 		return err
@@ -49,39 +51,46 @@ func (u *authUsecase) Register(ctx context.Context, username, email, password st
 		UpdatedAt:    time.Now(),
 	}
 
-	// 4. Gọi Repository để lưu vào DB (Sử dụng công cụ ở Task 3)
+	// 4. Gọi Repository để lưu vào DB
 	return u.userRepo.Create(ctx, newUser)
 }
 
 // Login xử lý logic Đăng nhập và trả về JWT Token
-func (u *authUsecase) Login(ctx context.Context, email, password string) (string, error) {
-	// 1. Tìm user theo email
-	user, err := u.userRepo.GetByEmail(ctx, email)
+func (u *authUsecase) Login(ctx context.Context, identifier, password string) (string, *domain.User, error) {
+	// Gọi hàm tìm kiếm linh hoạt từ Repo
+	user, err := u.userRepo.GetUserByIdentifier(ctx, identifier)
 	if err != nil {
-		return "", err
-	}
-	if user == nil {
-		return "", errors.New("thông tin đăng nhập không chính xác")
+		// 👉 SỬA: Thêm 'nil' vào giữa
+		return "", nil, err
 	}
 
-	// 2. So sánh mật khẩu (Sử dụng công cụ ở Task 2)
+	// Nếu ID = 0 hoặc user = nil nghĩa là không tìm thấy
+	if user == nil || user.ID == 0 {
+		// 👉 SỬA: Thêm 'nil' vào giữa
+		return "", nil, errors.New("tài khoản hoặc mật khẩu không chính xác")
+	}
+
+	// So sánh mật khẩu
 	match, err := auth.ComparePassword(password, user.PasswordHash)
 	if err != nil || !match {
-		return "", errors.New("thông tin đăng nhập không chính xác")
+		// 👉 SỬA: Thêm 'nil' vào giữa
+		return "", nil, errors.New("tài khoản hoặc mật khẩu không chính xác")
 	}
 
-	// 3. Tạo JWT Token (Sử dụng công cụ ở Task 2)
+	// Tạo JWT Token
 	expiry, _ := time.ParseDuration(u.cfg.JWTExpiry)
 	token, err := auth.GenerateToken(user.ID, u.cfg.JWTSecret, expiry)
 	if err != nil {
-		return "", err
+		// 👉 SỬA: Thêm 'nil' vào giữa
+		return "", nil, err
 	}
 
-	return token, nil
+	// Dòng này của cậu đúng chuẩn rồi!
+	return token, user, nil
 }
 
 func (u *authUsecase) UpdateAvatar(ctx context.Context, userID int64, url string) error {
-	// 1. Validate input
+	// Kiêm tra đầu vào
 	if userID <= 0 {
 		return errors.New("invalid user ID")
 	}
@@ -89,7 +98,7 @@ func (u *authUsecase) UpdateAvatar(ctx context.Context, userID int64, url string
 		return errors.New("avatar URL cannot be empty")
 	}
 
-	// 2. Check if user exists
+	// Kiểm tra xem user có tồn tại không
 	user, err := u.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return err
@@ -98,10 +107,11 @@ func (u *authUsecase) UpdateAvatar(ctx context.Context, userID int64, url string
 		return errors.New("user not found")
 	}
 
-	// 3. Update avatar in database
+	// lưu avatar
 	return u.userRepo.UpdateAvatar(ctx, userID, url)
 }
 
+// Trả về thông tin user
 func (u *authUsecase) GetProfile(ctx context.Context, userID int64) (*domain.User, error) {
 	user, err := u.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -111,6 +121,7 @@ func (u *authUsecase) GetProfile(ctx context.Context, userID int64) (*domain.Use
 	return user, nil
 }
 
+// Cập nhật username
 func (u *authUsecase) UpdateProfile(ctx context.Context, userID int64, username string) error {
 	user := &domain.User{
 		ID:       userID,
@@ -120,11 +131,20 @@ func (u *authUsecase) UpdateProfile(ctx context.Context, userID int64, username 
 	return u.userRepo.Update(ctx, user)
 }
 
-func (u *authUsecase) SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]domain.User, error) {
-	if query == "" {
-		return []domain.User{}, nil
-	}
-
-	// Truyền đủ 5 tham số xuống cho Repo
+// Tìm kiếm người dùng
+func (u *authUsecase) SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]dto.UserCompact, error) {
+	// Usecase bây giờ cực kỳ nhàn, chỉ việc gọi Repo và return
 	return u.userRepo.SearchUsers(ctx, currentUserID, query, limit, offset)
+}
+
+func (u *authUsecase) GetFollowing(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error) {
+	// Tầng Usecase là nơi chứa Business Logic.
+	// Tương lai cậu có thể thêm logic kiểm tra cache (Redis) ở đây.
+	// Hiện tại, ta chỉ việc gọi thẳng xuống tầng Repository:
+	return u.userRepo.GetFollowing(ctx, currentUserID, limit, offset)
+}
+
+// Lấy danh sách những người đang theo dõi mình (Followers)
+func (u *authUsecase) GetFollowers(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error) {
+	return u.userRepo.GetFollowers(ctx, currentUserID, limit, offset)
 }

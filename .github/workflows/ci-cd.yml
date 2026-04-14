@@ -1,0 +1,30 @@
+name: GitOps-BE
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build & Push Image
+        run: |
+          # Build image với tag là mã SHA của commit cho nó độc nhất
+          IMAGE_TAG=${{ github.sha }}
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/gopher-be:$IMAGE_TAG .
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker push ${{ secrets.DOCKER_USERNAME }}/gopher-be:$IMAGE_TAG
+
+      - name: Update K8s Manifest
+        run: |
+          # Sửa trực tiếp file backend.yaml bằng sed để cập nhật image mới
+          sed -i "s|image: .*/gopher-be:.*|image: ${{ secrets.DOCKER_USERNAME }}/gopher-be:${{ github.sha }}|g" k8s/base/backend.yaml
+          
+          git config --global user.name "Gopher Bot"
+          git config --global user.email "bot@gopher.com"
+          git add k8s/base/backend.yaml
+          git commit -m "Update image tag to ${{ github.sha }}"
+          git push

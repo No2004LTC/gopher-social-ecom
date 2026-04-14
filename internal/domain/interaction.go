@@ -28,13 +28,16 @@ type InteractionRepository interface {
 
 	// Comment logic
 	CreateComment(ctx context.Context, comment *Comment) error
+	UpdateComment(ctx context.Context, commentID int64, currentUserID int64, newContent string) error
+	DeleteComment(ctx context.Context, commentID int64, currentUserID int64) error
 	GetCommentsByPostID(ctx context.Context, postID int64) ([]Comment, error)
-
 	GetPostOwner(ctx context.Context, postID int64) int64 //
 }
 
 type InteractionUsecase interface {
 	ToggleLike(ctx context.Context, userID, postID int64) (bool, error) // Trả về true nếu là Like, false nếu là Unlike
 	CommentPost(ctx context.Context, userID, postID int64, content string) (*Comment, error)
+	UpdateComment(ctx context.Context, commentID int64, currentUserID int64, newContent string) error
+	DeleteComment(ctx context.Context, commentID int64, currentUserID int64) error
 	GetPostComments(ctx context.Context, postID int64) ([]Comment, error)
 }

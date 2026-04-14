@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/No2004LTC/gopher-social-ecom/pkg/auth"
 	"github.com/gin-gonic/gin"
@@ -10,29 +9,31 @@ import (
 
 func AuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenString := ""
+		tokenString := c.GetHeader("Authorization")
 
-		// 1. Thử lấy từ Header Authorization: Bearer <token>
-		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" {
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) == 2 && parts[0] == "Bearer" {
-				tokenString = parts[1]
+		// 2. Nếu Header không có (trường hợp WebSocket), lấy từ Query URL
+		if tokenString == "" {
+			tokenString = c.Query("token")
+		} else {
+			// Nếu có Header thì cắt bỏ chữ "Bearer "
+			if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+				tokenString = tokenString[7:]
 			}
 		}
 
-		// 2. Nếu Header không có, thử lấy từ Query Param ?token=<token>
-		// Cách này cực kỳ quan trọng cho kết nối WebSocket ban đầu
+		// Nếu Header không có, thử lấy từ Query Param ?token=<token>
 		if tokenString == "" {
-			tokenString = c.Query("token")
+			c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
+			return
 		}
 
+		// Nếu vẫn không có token, trả về lỗi
 		if tokenString == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Thiếu token"})
 			return
 		}
 
-		// 3. Validate Token
+		// kiểm tra token
 		userID, err := auth.ValidateToken(tokenString, secret)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token lỏ hoặc hết hạn"})

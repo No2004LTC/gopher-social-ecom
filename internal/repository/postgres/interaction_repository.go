@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"gorm.io/gorm"
@@ -44,15 +45,17 @@ func (r *interactionRepository) UnlikePost(ctx context.Context, userID, postID i
 
 // IsLiked: Kiểm tra xem user đã like chưa
 func (r *interactionRepository) IsLiked(ctx context.Context, userID, postID int64) (bool, error) {
-	var like domain.Like
-	err := r.db.WithContext(ctx).
+	var count int64
+	// Dùng Count() sẽ trả về 0 nếu không có, hoàn toàn không văng lỗi "record not found"
+	err := r.db.Model(&domain.Like{}).
 		Where("user_id = ? AND post_id = ?", userID, postID).
-		First(&like).Error
+		Count(&count).Error
 
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
+	if err != nil {
+		return false, err
 	}
-	return err == nil, err
+
+	return count > 0, nil
 }
 
 // CreateComment: Lưu comment mới
@@ -65,6 +68,38 @@ func (r *interactionRepository) CreateComment(ctx context.Context, comment *doma
 		return tx.Model(&domain.Post{}).Where("id = ?", comment.PostID).
 			UpdateColumn("comments_count", gorm.Expr("comments_count + ?", 1)).Error
 	})
+}
+
+func (r *interactionRepository) UpdateComment(ctx context.Context, commentID int64, currentUserID int64, newContent string) error {
+	// 1. Đổi model sang bảng Comment
+	result := r.db.WithContext(ctx).Model(&domain.Comment{}).
+		Where("id = ? AND user_id = ?", commentID, currentUserID). // 2. Đổi tham số thành commentID
+		Updates(map[string]interface{}{
+			"content":    newContent,
+			"updated_at": time.Now(),
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("không tìm thấy comment hoặc bạn không có quyền sửa")
+	}
+	return nil
+}
+
+func (r *interactionRepository) DeleteComment(ctx context.Context, commentID int64, currentUserID int64) error {
+	result := r.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", commentID, currentUserID).
+		Delete(&domain.Comment{}) // 3. Xóa model ở bảng Comment
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("không tìm thấy comment hoặc bạn không có quyền xóa")
+	}
+	return nil
 }
 
 // GetCommentsByPostID: Lấy danh sách comment kèm thông tin User

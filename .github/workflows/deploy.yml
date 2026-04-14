@@ -1,0 +1,43 @@
+name: Gopher Social Deploy
+
+on:
+  push:
+    branches: [ main ] # Tự động chạy khi push vào main
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKER_HUB_USERNAME }}/gopher-be
+  SERVICE_NAME: gopher-be
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          docker build -t ${{ env.IMAGE_NAME }}:$IMAGE_TAG .
+          docker push ${{ env.IMAGE_NAME }}:$IMAGE_TAG
+          # Gán tag mới nhất cho bản build này
+          docker tag ${{ env.IMAGE_NAME }}:$IMAGE_TAG ${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.IMAGE_NAME }}:latest
+
+      - name: Set up Kubeconfig
+        # Nếu cậu dùng Cloud (DigitalOcean/AWS), bước này để nạp quyền truy cập K8s
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Execute Deploy Script
+        run: |
+          export IMAGE_TAG=${{ github.sha }}
+          bash deploy.sh

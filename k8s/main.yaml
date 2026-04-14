@@ -1,0 +1,37 @@
+# This is a template file - variables will be substituted by deploy.sh using envsubst
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gopher-be
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gopher-be
+  template:
+    metadata:
+      labels:
+        app: gopher-be
+    spec:
+      containers:
+        - name: gopher-be
+          image: your-docker-username/gopher-be
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: gopher-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gopher-be
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+  selector:
+    app: gopher-be

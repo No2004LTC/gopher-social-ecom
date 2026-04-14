@@ -5,6 +5,7 @@ import (
 
 	"github.com/No2004LTC/gopher-social-ecom/internal/delivery/ws"
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
+	"github.com/No2004LTC/gopher-social-ecom/internal/dto"
 )
 
 type notificationUsecase struct {
@@ -41,4 +42,8 @@ func (u *notificationUsecase) GetNotifications(ctx context.Context, userID int64
 func (u *notificationUsecase) MarkAsRead(ctx context.Context, notiID int64) error {
 	// Usecase không trực tiếp sửa DB, nó gọi Repo làm
 	return u.repo.MarkAsRead(ctx, notiID)
+}
+
+func (u *notificationUsecase) GetUserNotifications(ctx context.Context, userID int64, limit, offset int) ([]dto.NotificationResponse, error) {
+	return u.repo.GetUserNotifications(ctx, userID, limit, offset)
 }

@@ -3,6 +3,8 @@ package domain
 import (
 	"context"
 	"time"
+
+	"github.com/No2004LTC/gopher-social-ecom/internal/dto"
 )
 
 type Notification struct {
@@ -21,10 +23,12 @@ type NotificationRepository interface {
 	Create(ctx context.Context, noti *Notification) error
 	GetByUserID(ctx context.Context, userID int64, limit, offset int) ([]Notification, error)
 	MarkAsRead(ctx context.Context, notiID int64) error
+	GetUserNotifications(ctx context.Context, userID int64, limit, offset int) ([]dto.NotificationResponse, error)
 }
 
 type NotificationUsecase interface {
 	SendNotification(ctx context.Context, noti *Notification) error
 	GetNotifications(ctx context.Context, userID int64, page int) ([]Notification, error)
 	MarkAsRead(ctx context.Context, notiID int64) error
+	GetUserNotifications(ctx context.Context, userID int64, limit, offset int) ([]dto.NotificationResponse, error)
 }

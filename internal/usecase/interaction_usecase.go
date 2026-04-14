@@ -2,6 +2,9 @@ package usecase
 
 import (
 	"context"
+	"errors"
+	"strings"
+
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 )
 
@@ -80,6 +83,17 @@ func (u *interactionUsecase) CommentPost(ctx context.Context, userID, postID int
 	}
 
 	return comment, nil
+}
+
+func (u *interactionUsecase) DeleteComment(ctx context.Context, commentID int64, currentUserID int64) error {
+	return u.repo.DeleteComment(ctx, commentID, currentUserID)
+}
+
+func (u *interactionUsecase) UpdateComment(ctx context.Context, commentID int64, currentUserID int64, newContent string) error {
+	if strings.TrimSpace(newContent) == "" {
+		return errors.New("nội dung bình luận không được để trống")
+	}
+	return u.repo.UpdateComment(ctx, commentID, currentUserID, newContent)
 }
 
 func (u *interactionUsecase) GetPostComments(ctx context.Context, postID int64) ([]domain.Comment, error) {

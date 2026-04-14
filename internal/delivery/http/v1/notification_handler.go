@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/No2004LTC/gopher-social-ecom/internal/delivery/http/response"
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
+	"github.com/No2004LTC/gopher-social-ecom/internal/dto"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,28 +19,75 @@ func NewNotificationHandler(notiUC domain.NotificationUsecase) *NotificationHand
 }
 
 func (h *NotificationHandler) GetNotifications(c *gin.Context) {
-	userID := c.MustGet("user_id").(int64)
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	// Lấy ID từ token
+	uid, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		return
+	}
+	userID := uid.(int64)
 
-	notifications, err := h.notiUC.GetNotifications(c.Request.Context(), userID, page)
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	// Gọi Usecase
+	notifications, err := h.notiUC.GetUserNotifications(c.Request.Context(), userID, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.Error(c, http.StatusInternalServerError, "Lỗi khi tải thông báo")
 		return
 	}
 
-	c.JSON(http.StatusOK, notifications)
+	// Trả về cho Frontend
+	response.Success(c, "Lấy thông báo thành công", notifications)
 }
 
 func (h *PostHandler) GetDiscoveryFeed(c *gin.Context) {
+	// 1. Lấy thông tin từ Context và Query
 	userID := c.MustGet("user_id").(int64)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
-	posts, err := h.postUC.GetDiscoveryFeed(c.Request.Context(), userID, page)
+	// 2. Gọi Usecase mới (Hàm GetPosts vạn năng)
+	// targetUserID = 0 để lấy bài viết của tất cả mọi người (Discovery/Global Feed)
+	posts, err := h.postUC.GetPosts(c.Request.Context(), userID, 0, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, posts)
+
+	// 3. Mapping sang DTO PostResponse để trả về cho FE (Giúp hiện tim đỏ, bookmark vàng)
+	response := make([]dto.PostResponse, 0)
+	for _, p := range posts {
+		// Khởi tạo Author mặc định để tránh nil pointer
+		authorData := dto.ActorCompact{
+			ID:        0,
+			Username:  "Unknown",
+			AvatarURL: "",
+		}
+
+		if p.User != nil {
+			authorData.ID = p.User.ID
+			authorData.Username = p.User.Username
+			authorData.AvatarURL = p.User.AvatarURL
+		}
+
+		response = append(response, dto.PostResponse{
+			ID:            p.ID,
+			Content:       p.Content,
+			ImageURL:      p.ImageURL,
+			LikesCount:    p.LikesCount,
+			CommentsCount: p.CommentsCount,
+			IsLiked:       p.IsLiked,
+			IsSaved:       p.IsSaved,
+			CreatedAt:     p.CreatedAt,
+			Author:        authorData,
+		})
+	}
+
+	// 4. Trả về đúng format mà NewsFeed.tsx đang mong đợi
+	c.JSON(http.StatusOK, gin.H{
+		"data": response,
+	})
 }
 
 func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
