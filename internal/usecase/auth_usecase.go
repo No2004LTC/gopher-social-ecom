@@ -3,25 +3,30 @@ package usecase
 import (
 	"context"
 	"errors"
+	"log"
+	"strconv"
 	"time"
 
 	"github.com/No2004LTC/gopher-social-ecom/config"
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"github.com/No2004LTC/gopher-social-ecom/internal/dto"
 	"github.com/No2004LTC/gopher-social-ecom/pkg/auth"
+	"github.com/redis/go-redis/v9"
 )
 
 // Struct dùng các hàm trong UserRepository và load config
 type authUsecase struct {
-	userRepo domain.UserRepository
-	cfg      *config.Config
+	userRepo    domain.UserRepository
+	cfg         *config.Config
+	redisClient *redis.Client
 }
 
 // NewAuthUsecase khởi tạo tầng nghiệp vụ Authentication
-func NewAuthUsecase(repo domain.UserRepository, cfg *config.Config) domain.UserUsecase {
+func NewAuthUsecase(repo domain.UserRepository, cfg *config.Config, rdb *redis.Client) domain.UserUsecase {
 	return &authUsecase{
-		userRepo: repo,
-		cfg:      cfg,
+		userRepo:    repo,
+		cfg:         cfg,
+		redisClient: rdb,
 	}
 }
 
@@ -56,36 +61,28 @@ func (u *authUsecase) Register(ctx context.Context, username, email, password st
 }
 
 // Login xử lý logic Đăng nhập và trả về JWT Token
-func (u *authUsecase) Login(ctx context.Context, identifier, password string) (string, *domain.User, error) {
-	// Gọi hàm tìm kiếm linh hoạt từ Repo
-	user, err := u.userRepo.GetUserByIdentifier(ctx, identifier)
+func (u *authUsecase) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
+	// Chỉ dùng Email
+	user, err := u.userRepo.GetByEmail(ctx, email)
 	if err != nil {
-		// 👉 SỬA: Thêm 'nil' vào giữa
 		return "", nil, err
 	}
 
-	// Nếu ID = 0 hoặc user = nil nghĩa là không tìm thấy
 	if user == nil || user.ID == 0 {
-		// 👉 SỬA: Thêm 'nil' vào giữa
-		return "", nil, errors.New("tài khoản hoặc mật khẩu không chính xác")
+		return "", nil, errors.New("email hoặc mật khẩu không chính xác")
 	}
 
-	// So sánh mật khẩu
 	match, err := auth.ComparePassword(password, user.PasswordHash)
 	if err != nil || !match {
-		// 👉 SỬA: Thêm 'nil' vào giữa
-		return "", nil, errors.New("tài khoản hoặc mật khẩu không chính xác")
+		return "", nil, errors.New("email hoặc mật khẩu không chính xác")
 	}
 
-	// Tạo JWT Token
 	expiry, _ := time.ParseDuration(u.cfg.JWTExpiry)
 	token, err := auth.GenerateToken(user.ID, u.cfg.JWTSecret, expiry)
 	if err != nil {
-		// 👉 SỬA: Thêm 'nil' vào giữa
 		return "", nil, err
 	}
 
-	// Dòng này của cậu đúng chuẩn rồi!
 	return token, user, nil
 }
 
@@ -147,4 +144,54 @@ func (u *authUsecase) GetFollowing(ctx context.Context, currentUserID int64, lim
 // Lấy danh sách những người đang theo dõi mình (Followers)
 func (u *authUsecase) GetFollowers(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error) {
 	return u.userRepo.GetFollowers(ctx, currentUserID, limit, offset)
+}
+
+func (uc *authUsecase) GetFriendSuggestions(ctx context.Context, userID int64) ([]domain.SuggestedUser, error) {
+	// Nghiệp vụ: Lấy tối đa 10 người gợi ý để tránh nặng server
+	limit := 10
+
+	suggestions, err := uc.userRepo.GetSuggestedUsers(ctx, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	return suggestions, nil
+}
+
+func (uc *authUsecase) GetOnlineContacts(ctx context.Context, userID int64) ([]dto.UserCompact, error) {
+	// 1. Lấy danh sách những người đang Follow mình từ Database
+	// Chúng ta tận dụng hàm GetFollowers có sẵn trong Repo của cậu
+	// Limit 50 người, Offset 0 (Cậu có thể tùy chỉnh nếu muốn phân trang)
+	contacts, err := uc.userRepo.GetFollowers(ctx, userID, 50, 0)
+	log.Printf("🔍 [DEBUG] User %d có %d followers trong DB", userID, len(contacts))
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Lấy toàn bộ danh sách ID đang online từ Redis (Hash Map)
+	// Key "system:online_users" lưu trữ [userID]:[connection_count]
+	onlineMap, err := uc.redisClient.HGetAll(ctx, "system:online_users").Result()
+	log.Printf("🔍 [DEBUG] Redis Online Map: %v", onlineMap)
+	if err != nil {
+		// Nếu Redis gặp sự cố, ta vẫn trả về danh sách nhưng IsOnline mặc định là false
+		// để tránh làm sập cả trang web của người dùng.
+		return contacts, nil
+	}
+
+	// 3. Khớp dữ liệu: Duyệt qua danh sách từ DB và kiểm tra trạng thái trong Redis
+	var onlineList []dto.UserCompact
+	for _, u := range contacts {
+		userIDStr := strconv.FormatInt(u.ID, 10)
+		countStr, exists := onlineMap[userIDStr]
+		log.Printf("🔍 [DEBUG] Kiểm tra User %s: Exists=%v, Count=%s", userIDStr, exists, countStr)
+
+		if exists {
+			count, _ := strconv.Atoi(countStr)
+			if count > 0 {
+				u.IsOnline = true
+				onlineList = append(onlineList, u)
+			}
+		}
+	}
+	return onlineList, nil
 }

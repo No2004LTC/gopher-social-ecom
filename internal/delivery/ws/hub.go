@@ -4,37 +4,52 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strconv"
 	"sync"
 
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
+	"github.com/redis/go-redis/v9" // 👉 NHỚ IMPORT REDIS
 )
 
 type Hub struct {
-	Clients        sync.Map
-	Broadcast      chan []byte
-	PrivateMessage chan domain.Message
-	Notifications  chan domain.Notification
-	Register       chan *Client // Thêm cái này
-	Unregister     chan *Client // Và cái này
-	ChatUC         domain.ChatUsecase
+	// Dùng sync.Map cực an toàn
+	Clients       sync.Map
+	Broadcast     chan []byte
+	Notifications chan domain.Notification
+	Register      chan *Client
+	Unregister    chan *Client
+
+	// 👉 ĐÃ THÊM: Con trỏ Redis để các Client có thể dùng chung
+	Redis *redis.Client
 }
 
-func NewHub(chatUC domain.ChatUsecase) *Hub {
+// 👉 CẬP NHẬT CONSTRUCTOR: Bắt buộc truyền Redis vào khi tạo Hub
+func NewHub(rdb *redis.Client) *Hub {
 	return &Hub{
-		Broadcast:      make(chan []byte),
-		PrivateMessage: make(chan domain.Message),
-		Register:       make(chan *Client), // Khởi tạo
-		Unregister:     make(chan *Client), // Khởi tạo
-		Notifications:  make(chan domain.Notification, 100),
-		ChatUC:         chatUC,
+		Broadcast:     make(chan []byte),
+		Register:      make(chan *Client),
+		Unregister:    make(chan *Client),
+		Notifications: make(chan domain.Notification, 100),
+		Redis:         rdb, // Gắn Redis vào Hub
+	}
+}
+
+// Hàm gửi tin nhắn trực tiếp đến 1 User cụ thể
+func (h *Hub) SendToUser(userID int64, message []byte) {
+	if val, ok := h.Clients.Load(userID); ok {
+		client := val.(*Client)
+		select {
+		case client.Send <- message:
+		default:
+			h.Clients.Delete(userID)
+			close(client.Send)
+		}
 	}
 }
 
 func (h *Hub) BroadcastNotification(noti domain.Notification) {
-	// Dùng select với default để nếu channel đầy thì cũng không làm treo App
 	select {
 	case h.Notifications <- noti:
-		// Gửi thành công vào hàng chờ
 	default:
 		log.Printf("Cảnh báo: Hàng chờ thông báo đã đầy, bỏ qua thông báo cho User %d", noti.UserID)
 	}
@@ -44,40 +59,45 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.Register:
-			// Lưu client vào bản đồ dựa trên UserID
 			h.Clients.Store(client.UserID, client)
-			log.Printf("User %d đã kết nối", client.UserID)
+			if h.Redis != nil {
+				ctx := context.Background()
+				h.Redis.HIncrBy(ctx, "system:online_users", strconv.FormatInt(client.UserID, 10), 1)
+
+				// 👉 PHÁT TÍN HIỆU: Báo cho tất cả mọi người là có thay đổi trạng thái online
+				statusNotify, _ := json.Marshal(map[string]interface{}{
+					"type": "USER_STATUS_CHANGE",
+					"data": map[string]interface{}{
+						"user_id": client.UserID,
+						"status":  "online",
+					},
+				})
+				h.Broadcast <- statusNotify // Gửi cho tất cả client đang kết nối
+			}
 
 		case client := <-h.Unregister:
-			// Khi user ngắt kết nối, xóa họ khỏi Map và đóng channel Send
 			if _, ok := h.Clients.Load(client.UserID); ok {
 				h.Clients.Delete(client.UserID)
 				close(client.Send)
-				log.Printf("User %d đã thoát", client.UserID)
-			}
 
-		case msg := <-h.PrivateMessage:
-			// --- BƯỚC 1: LƯU VÀO DATABASE (Chạy ngầm) ---
-			go func(m domain.Message) {
-				err := h.ChatUC.SaveMessage(context.Background(), &m)
-				if err != nil {
-					log.Printf("Lỗi khi lưu tin nhắn: %v", err)
+				if h.Redis != nil {
+					ctx := context.Background()
+					userIDStr := strconv.FormatInt(client.UserID, 10)
+					newCount, _ := h.Redis.HIncrBy(ctx, "system:online_users", userIDStr, -1).Result()
+					if newCount <= 0 {
+						h.Redis.HDel(ctx, "system:online_users", userIDStr)
+
+						// 👉 PHÁT TÍN HIỆU: Báo cho mọi người là User này đã offline
+						statusNotify, _ := json.Marshal(map[string]interface{}{
+							"type": "USER_STATUS_CHANGE",
+							"data": map[string]interface{}{
+								"user_id": client.UserID,
+								"status":  "offline",
+							},
+						})
+						h.Broadcast <- statusNotify
+					}
 				}
-			}(msg)
-
-			// --- BƯỚC 2: ĐẨY TIN NHẮN REAL-TIME ---
-			// Gửi cho người nhận
-			if val, ok := h.Clients.Load(msg.ToUserID); ok {
-				targetClient := val.(*Client)
-				payload, _ := json.Marshal(msg)
-				targetClient.Send <- payload
-			}
-
-			// Gửi cho người gửi (để đồng bộ giao diện)
-			if val, ok := h.Clients.Load(msg.FromUserID); ok {
-				senderClient := val.(*Client)
-				payload, _ := json.Marshal(msg)
-				senderClient.Send <- payload
 			}
 
 		case message := <-h.Broadcast:
@@ -86,10 +106,10 @@ func (h *Hub) Run() {
 				client.Send <- message
 				return true
 			})
+
 		case noti := <-h.Notifications:
 			if val, ok := h.Clients.Load(noti.UserID); ok {
 				client := val.(*Client)
-				// Gói lại thành một chuẩn JSON để Frontend dễ phân biệt với tin nhắn chat
 				payload, _ := json.Marshal(map[string]interface{}{
 					"type": "NOTIFICATION",
 					"data": noti,
@@ -97,7 +117,7 @@ func (h *Hub) Run() {
 				select {
 				case client.Send <- payload:
 				default:
-					log.Printf("Không thể gửi thông báo cho User %d, hàng chờ của client đã đầy", noti.UserID)
+					log.Printf("Không thể gửi thông báo cho User %d", noti.UserID)
 				}
 			}
 		}

@@ -197,3 +197,40 @@ func (r *userRepository) GetFollowers(ctx context.Context, currentUserID int64, 
 
 	return users, err
 }
+
+func (r *userRepository) GetSuggestedUsers(ctx context.Context, myUserID int64, limit int) ([]domain.SuggestedUser, error) {
+	var suggestions []domain.SuggestedUser
+
+	// 🧠 GIẢI THÍCH THUẬT TOÁN FOLLOW:
+	// - Lấy u.id KHÁC myUserID (Không tự gợi ý chính mình)
+	// - Lấy u.id CHƯA CÓ TRONG danh sách đang theo dõi (following_id) của myUserID
+	// - Subquery đếm số người chung (mutual): Đếm số lượng những người mà (myUserID đang theo dõi) VÀ họ (đang theo dõi u.id)
+	query := `
+		SELECT 
+			u.id, 
+			u.username, 
+			u.avatar_url,
+			(
+				SELECT COUNT(*) 
+				FROM follows f1
+				INNER JOIN follows f2 ON f1.following_id = f2.follower_id
+				WHERE f1.follower_id = ? 
+				  AND f2.following_id = u.id
+			) AS mutual_friends_count
+		FROM users u
+		WHERE u.id != ?
+		  AND u.id NOT IN (
+			  SELECT following_id FROM follows WHERE follower_id = ?
+		  )
+		ORDER BY mutual_friends_count DESC, u.created_at DESC
+		LIMIT ?;
+	`
+
+	// Truyền 4 tham số: myUserID (cho Subquery), myUserID (loại trừ bản thân), myUserID (loại trừ người đã follow), limit
+	err := r.db.WithContext(ctx).Raw(query, myUserID, myUserID, myUserID, limit).Scan(&suggestions).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return suggestions, nil
+}

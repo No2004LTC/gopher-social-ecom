@@ -45,19 +45,17 @@ func (h *AuthHandler) Register(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		// Dùng hàm response.Error có sẵn của cậu
-		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ")
+		response.Error(c, http.StatusBadRequest, "Dữ liệu email không hợp lệ")
 		return
 	}
 
-	// 👉 Hứng cả token VÀ user từ Usecase
-	token, user, err := h.authUsecase.Login(c.Request.Context(), req.Identifier, req.Password)
+	// Gọi Usecase với req.Email
+	token, user, err := h.authUsecase.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		response.Error(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	// 👉 Đóng gói vào DTO mới để trả về cho React
 	res := dto.LoginResponse{
 		AccessToken: token,
 		TokenType:   "Bearer",
@@ -226,4 +224,69 @@ func (h *AuthHandler) GetFollowers(c *gin.Context) {
 	}
 
 	response.Success(c, "Lấy danh sách thành công", users)
+}
+
+func (h *AuthHandler) GetSuggestions(c *gin.Context) {
+	// A. Lấy userID từ Token (Giả định AuthMiddleware của cậu set biến này là "user_id")
+	// Chú ý: Cậu check lại AuthMiddleware của cậu xem key lưu ID là "user_id" hay gì nhé
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	// B. Gọi Usecase (Truyền c.Request.Context() để đồng bộ timeout/cancel)
+	suggestions, err := h.authUsecase.GetFriendSuggestions(c.Request.Context(), userID.(int64))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lấy danh sách gợi ý"})
+		return
+	}
+
+	// C. Map dữ liệu từ Domain Model sang Response DTO
+	var res []dto.SuggestedUserResponse
+	for _, s := range suggestions {
+		res = append(res, dto.SuggestedUserResponse{
+			ID:                 s.ID,
+			Username:           s.Username,
+			AvatarURL:          s.AvatarURL,
+			MutualFriendsCount: s.MutualFriendsCount,
+		})
+	}
+
+	// Xử lý mảng rỗng: Để React nhận được [] thay vì null khi không có gợi ý nào
+	if res == nil {
+		res = []dto.SuggestedUserResponse{}
+	}
+
+	// D. Trả về cho Frontend
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Thành công",
+		"data":    res,
+	})
+}
+
+// GetOnlineFriends lấy danh sách bạn bè đang trực tuyến (quét qua Redis)
+func (h *AuthHandler) GetOnlineFriends(c *gin.Context) {
+	// 1. Lấy ID của người dùng từ Token (được AuthMiddleware ném vào Context)
+	// Lưu ý: Cậu kiểm tra lại xem middleware của cậu dùng key là "user_id" hay "userID" nhé
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Không tìm thấy thông tin xác thực"})
+		return
+	}
+
+	// 2. Gọi xuống tầng Usecase
+	// Chú ý: Ở bài trước chúng ta đặt tên hàm trong Usecase là GetOnlineContacts
+	onlineContacts, err := h.authUsecase.GetOnlineContacts(c.Request.Context(), userID.(int64))
+	if err != nil {
+		// Log lỗi ra console để dễ debug nếu cần
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lấy danh sách bạn bè online"})
+		return
+	}
+
+	// 3. Trả về cho Frontend
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Lấy danh sách thành công",
+		"data":    onlineContacts, // Cục này chính là mảng []dto.UserCompact đã gắn is_online = true
+	})
 }

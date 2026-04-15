@@ -14,10 +14,18 @@ type User struct {
 	Email        string    `gorm:"column:email;uniqueIndex" json:"email"`
 	PasswordHash string    `gorm:"column:password_hash" json:"-"`
 	AvatarURL    string    `gorm:"column:avatar_url" json:"avatar_url"`
+	Bio          string    `json:"bio"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 	// -> để GORM cho phép "đọc" từ DB vào nhưng không "ghi" xuống DB
 	IsFollowing bool `json:"is_following" gorm:"->"`
+}
+
+type SuggestedUser struct {
+	ID                 int64  `json:"id"`
+	Username           string `json:"username"`
+	AvatarURL          string `json:"avatar_url"`
+	MutualFriendsCount int    `json:"mutual_friends_count"`
 }
 
 // UserRepository (Các hàm tôi tạo để truy vấn)
@@ -31,6 +39,7 @@ type UserRepository interface {
 	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]dto.UserCompact, error)
 	GetFollowing(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
 	GetFollowers(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
+	GetSuggestedUsers(ctx context.Context, userID int64, limit int) ([]SuggestedUser, error)
 }
 
 // UserUsecase (Chứa business logic)
@@ -43,4 +52,6 @@ type UserUsecase interface {
 	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]dto.UserCompact, error)
 	GetFollowing(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
 	GetFollowers(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
+	GetFriendSuggestions(ctx context.Context, userID int64) ([]SuggestedUser, error)
+	GetOnlineContacts(ctx context.Context, userID int64) ([]dto.UserCompact, error)
 }

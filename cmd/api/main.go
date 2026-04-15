@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/No2004LTC/gopher-social-ecom/config"
@@ -13,6 +14,7 @@ import (
 	"github.com/No2004LTC/gopher-social-ecom/pkg/storage"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -25,43 +27,56 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379", // Địa chỉ mặc định của Redis (Sửa lại nếu cậu dùng port khác)
+		Password: "",               // Mật khẩu (để trống nếu cài mặc định)
+		DB:       0,                // Dùng Database số 0 mặc định
+	})
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("🔴 Lỗi kết nối Redis: %v.", err)
+	}
+	log.Println("🟢 Kết nối Redis thành công!")
 
 	// --- 3. KHỞI TẠO CÁC TẦNG (Dependency Injection) ---
 
-	// A. WebSocket & Chat (Cần có Hub trước)
+	// A. Hệ thống WebSocket & Chat
 	chatRepo := postgres.NewChatRepository(db)
 	chatUC := usecase.NewChatUsecase(chatRepo)
-	hub := ws.NewHub(chatUC)
+
+	// Hub nhận redisClient để ghi nhận trạng thái Online/Offline vào Redis
+	hub := ws.NewHub(redisClient)
 	go hub.Run()
 	wsHandler := v1.NewWSHandler(hub, chatUC)
 
-	// B. HỆ THỐNG THÔNG BÁO (NOTIFICATION) - Cực kỳ quan trọng
+	// B. Hệ thống Thông báo
 	notiRepo := postgres.NewNotificationRepository(db)
-	notiUC := usecase.NewNotificationUsecase(notiRepo, hub) // Truyền hub vào đây để bắn realtime
+	notiUC := usecase.NewNotificationUsecase(notiRepo, hub)
 	notiHandler := v1.NewNotificationHandler(notiUC)
 
-	// C. Các Repo & Usecase khác (Bây giờ truyền notiUC thay vì truyền hub lẻ tẻ)
-	followRepo := postgres.NewFollowRepository(db)
-	// Thay vì truyền hub, ta truyền notiUC để Follow xong thì lưu thông báo vào DB luôn
-	followUC := usecase.NewFollowUsecase(followRepo, notiUC)
-	followHandler := v1.NewFollowHandler(followUC)
-
+	// C. Hệ thống User & Auth (QUAN TRỌNG NHẤT Ở ĐÂY)
 	userRepo := postgres.NewUserRepository(db)
-	authUsecase := usecase.NewAuthUsecase(userRepo, cfg)
+
+	// 👉 CẬP NHẬT: Đảm bảo NewAuthUsecase nhận ĐỦ 3 tham số: repo, config, và redisClient
+	// Nếu NewAuthUsecase của cậu chưa nhận redisClient, hãy vào file đó thêm vào struct nhé!
+	authUsecase := usecase.NewAuthUsecase(userRepo, cfg, redisClient)
 
 	s3Client, err := storage.NewS3Client(cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, cfg.MinioUseSSL)
 	if err != nil {
 		log.Fatal(err)
 	}
+	// AuthHandler quản lý GetOnlineFriends -> Nó gọi authUsecase đã có Redis
 	authHandler := v1.NewAuthHandler(authUsecase, s3Client)
 
+	// D. Các hệ thống khác
+	followRepo := postgres.NewFollowRepository(db)
+	followUC := usecase.NewFollowUsecase(followRepo, notiUC)
+	followHandler := v1.NewFollowHandler(followUC)
+
 	postRepo := postgres.NewPostRepository(db)
-	// PostUsecase giờ nhận thêm notiUC để báo "Có bài mới" cho follower
 	postUC := usecase.NewPostUsecase(postRepo, s3Client, notiUC)
 	postHandler := v1.NewPostHandler(postUC)
 
 	interRepo := postgres.NewInteractionRepository(db)
-	// InteractionUsecase nhận notiUC để báo "Có người Like/Comment"
 	interUC := usecase.NewInteractionUsecase(interRepo, notiUC)
 	interHandler := v1.NewInteractionHandler(interUC)
 
@@ -87,8 +102,12 @@ func main() {
 		{
 			// WebSocket Routes
 			v1Group.GET("/ws", middleware.AuthMiddleware(cfg.JWTSecret), wsHandler.ServeWS)
-			v1Group.GET("/chats/:to_user_id", middleware.AuthMiddleware(cfg.JWTSecret), wsHandler.GetHistory)
-
+			chatGroup := v1Group.Group("/chats")
+			chatGroup.Use(middleware.AuthMiddleware(cfg.JWTSecret)) // 👉 Áp dụng Auth 1 lần cho cả Group!
+			{
+				chatGroup.POST("", wsHandler.SendMessage)           // Tuyến: POST /api/v1/chats
+				chatGroup.GET("/:to_user_id", wsHandler.GetHistory) // Tuyến: GET /api/v1/chats/:to_user_id
+			}
 			// Auth Routes
 			auth := v1Group.Group("/auth")
 			{
@@ -107,6 +126,9 @@ func main() {
 
 				users.GET("/following", authHandler.GetFollowing)
 				users.GET("/followers", authHandler.GetFollowers)
+
+				users.GET("/suggestions", authHandler.GetSuggestions)
+				users.GET("/online-contacts", authHandler.GetOnlineFriends)
 
 				users.POST("/:id/follow", followHandler.Follow)
 				users.POST("/:id/unfollow", followHandler.Unfollow)

@@ -1,11 +1,11 @@
 package ws
 
 import (
+	"context"
 	"log"
-	"net/http"
+	"strconv"
 	"time"
 
-	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"github.com/gorilla/websocket"
 )
 
@@ -16,12 +16,6 @@ const (
 	maxMessageSize = 512
 )
 
-type Message struct {
-	FromUserID int64  `json:"from_user_id"`
-	ToUserID   int64  `json:"to_user_id"`
-	Content    string `json:"content"`
-}
-
 type Client struct {
 	Hub    *Hub
 	Conn   *websocket.Conn
@@ -31,25 +25,41 @@ type Client struct {
 
 func (c *Client) ReadPump() {
 	defer func() {
-		// Gửi vào channel Unregister thay vì gọi hàm
+		// 1. Gửi tín hiệu hủy đăng ký cho Hub
 		c.Hub.Unregister <- c
+
+		// 2. 👉 REDIS: XỬ LÝ TRẠNG THÁI OFFLINE (GIẢM COUNT)
+		// Lưu ý: Cậu cần đảm bảo struct Hub đã được gắn thêm trường Redis (*redis.Client)
+		if c.Hub.Redis != nil {
+			ctx := context.Background()
+			userIDStr := strconv.FormatInt(c.UserID, 10)
+
+			// Giảm số lượng connection (tab) đi 1
+			newCount, err := c.Hub.Redis.HIncrBy(ctx, "system:online_users", userIDStr, -1).Result()
+			if err == nil && newCount <= 0 {
+				// Nếu count <= 0 nghĩa là user đã đóng tab cuối cùng -> Xóa hẳn khỏi map
+				c.Hub.Redis.HDel(ctx, "system:online_users", userIDStr)
+			}
+		}
+
+		// 3. Đóng ống nối
 		c.Conn.Close()
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
-	// ... (giữ nguyên logic timeout)
+	// Đặt thời gian timeout, nếu sau pongWait mà không thấy trình duyệt phản hồi -> Rớt mạng
+	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.Conn.SetPongHandler(func(string) error { c.Conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 
 	for {
-		// Dùng trực tiếp domain.Message để khớp với Hub
-		var msg domain.Message
-		err := c.Conn.ReadJSON(&msg)
+		// Chỉ đọc để giữ kết nối, bỏ qua payload vì Frontend không gửi chat qua ống này nữa
+		_, _, err := c.Conn.ReadMessage()
 		if err != nil {
-			log.Printf("error: %v", err)
-			break
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Lỗi kết nối WS: %v", err)
+			}
+			break // Thoát vòng lặp -> Chạy defer để ngắt kết nối và trừ count Redis
 		}
-		msg.FromUserID = c.UserID
-
-		c.Hub.PrivateMessage <- msg
 	}
 }
 
@@ -76,35 +86,11 @@ func (c *Client) WritePump() {
 				return
 			}
 		case <-ticker.C:
-			// Gửi gói tin Ping để giữ kết nối (Keep-alive)
+			// Gửi gói tin Ping định kỳ để giữ kết nối không bị Proxy/Nginx ngắt
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
 		}
 	}
-}
-
-func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request, userID int64) {
-	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true }, // Cho phép mọi nguồn để test Postman dễ dàng
-	}
-
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-
-	client := &Client{
-		Hub:    hub,
-		Conn:   conn,
-		Send:   make(chan []byte, 256),
-		UserID: userID,
-	}
-
-	// ĐĂNG KÝ CLIENT VÀO HUB
-	hub.Register <- client
-
-	go client.WritePump()
-	go client.ReadPump()
 }
