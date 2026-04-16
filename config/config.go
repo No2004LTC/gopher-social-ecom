@@ -22,6 +22,13 @@ type Config struct {
 	MinioSecretKey string `mapstructure:"MINIO_SECRET_KEY"`
 	MinioUseSSL    bool   `mapstructure:"MINIO_USE_SSL"`
 	MinioBucket    string `mapstructure:"MINIO_BUCKET_NAME"`
+
+	// Thêm cấu hình SMTP Gửi Mail
+	SMTPHost     string `mapstructure:"SMTP_HOST"`
+	SMTPPort     string `mapstructure:"SMTP_PORT"`
+	SMTPUser     string `mapstructure:"SMTP_USER"`
+	SMTPPassword string `mapstructure:"SMTP_PASSWORD"`
+	SenderEmail  string `mapstructure:"SENDER_EMAIL"`
 }
 
 // LoadConfig sẽ tìm file .env và nạp giá trị vào struct Config

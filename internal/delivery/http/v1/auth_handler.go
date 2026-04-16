@@ -130,6 +130,63 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 	})
 }
 
+// [POST] /api/v1/users/cover -> Upload Cover Image
+func (h *AuthHandler) UploadCover(c *gin.Context) {
+	uid, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	var userID int64
+	switch v := uid.(type) {
+	case int64:
+		userID = v
+	case float64:
+		userID = int64(v)
+	default:
+		response.Error(c, http.StatusInternalServerError, "Invalid user ID type")
+		return
+	}
+
+	// 👉 Đón key "cover" từ form-data của Frontend
+	file, err := c.FormFile("cover")
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "File not found")
+		return
+	}
+
+	f, err := file.Open()
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Cannot open file: "+err.Error())
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	// 👉 Đổi thư mục lưu trữ trên MinIO thành "covers/"
+	objectName := "covers/" + file.Filename
+	_, err = h.s3Client.PutObject(c.Request.Context(), objectName, f, file.Size, minio.PutObjectOptions{
+		ContentType: file.Header.Get("Content-Type"),
+	})
+
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Upload failed: "+err.Error())
+		return
+	}
+
+	url := fmt.Sprintf("http://%s/%s/%s", h.s3Client.Endpoint(), h.s3Client.Bucket(), objectName)
+
+	if err := h.authUsecase.UpdateCover(c.Request.Context(), userID, url); err != nil {
+		response.Error(c, http.StatusInternalServerError, "Database update failed: "+err.Error())
+		return
+	}
+
+	response.Success(c, "Cover image updated successfully", gin.H{
+		"url":     url,
+		"user_id": userID,
+	})
+}
+
 // [GET] /api/v1/users/me -> Xem profile
 func (h *AuthHandler) GetMe(c *gin.Context) {
 	uid, _ := c.Get("user_id")
@@ -147,21 +204,20 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 
 // [PATCH] /api/v1/users/profile -> Cập nhật tên
 func (h *AuthHandler) UpdateProfile(c *gin.Context) {
-	var input dto.UpdateProfileRequest // Đã dùng DTO
+	userID := c.MustGet("user_id").(int64)
+
+	var input dto.UpdateProfileInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ")
+		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ: "+err.Error())
 		return
 	}
 
-	uid, _ := c.Get("user_id")
-	userID := uid.(int64)
-
-	if err := h.authUsecase.UpdateProfile(c.Request.Context(), userID, input.Username); err != nil {
-		response.Error(c, http.StatusInternalServerError, "Cập nhật thất bại")
+	if err := h.authUsecase.UpdateProfile(c.Request.Context(), userID, input); err != nil {
+		response.Error(c, http.StatusInternalServerError, "Lỗi cập nhật: "+err.Error())
 		return
 	}
 
-	response.SuccessMessage(c, "Cập nhật thành công")
+	response.Success(c, "Cập nhật thành công", nil)
 }
 
 // [GET] /api/v1/users/search -> Tìm kiếm người dùng
@@ -289,4 +345,82 @@ func (h *AuthHandler) GetOnlineFriends(c *gin.Context) {
 		"message": "Lấy danh sách thành công",
 		"data":    onlineContacts, // Cục này chính là mảng []dto.UserCompact đã gắn is_online = true
 	})
+}
+
+// [GET] /api/v1/users/profile/:username -> Xem profile của người khác (hoặc chính mình)
+func (h *AuthHandler) GetUserProfile(c *gin.Context) {
+	// 1. Lấy ID của người đang đăng nhập từ Token
+	uid, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		return
+	}
+
+	// Cẩn thận ép kiểu (tùy theo middleware của cậu trả về int64 hay float64)
+	var currentUserID int64
+	switch v := uid.(type) {
+	case int64:
+		currentUserID = v
+	case float64:
+		currentUserID = int64(v)
+	default:
+		currentUserID = uid.(int64) // Ép kiểu mặc định
+	}
+
+	// 2. Lấy username từ URL param
+	targetUsername := c.Param("username")
+	if targetUsername == "" {
+		response.Error(c, http.StatusBadRequest, "Thiếu tên người dùng")
+		return
+	}
+
+	// 3. Gọi Usecase
+	user, err := h.authUsecase.GetUserProfileByUsername(c.Request.Context(), currentUserID, targetUsername)
+	if err != nil {
+		// Tùy theo lỗi mà trả về 404 hoặc 500
+		response.Error(c, http.StatusNotFound, err.Error())
+		return
+	}
+
+	// 4. Trả kết quả
+	response.Success(c, "Lấy thông tin profile thành công", user)
+}
+
+// SendPasswordOTP xử lý yêu cầu gửi mã OTP về email
+func (h *AuthHandler) SendPasswordOTP(c *gin.Context) {
+	var req dto.SendOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Gọi hàm package-level: response.Error()
+		response.Error(c, http.StatusBadRequest, "Email không hợp lệ")
+		return
+	}
+
+	// Gọi xuống Usecase
+	err := h.authUsecase.SendPasswordOTP(c.Request.Context(), req.Email)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Dùng SuccessMessage vì không cần trả về Data
+	response.SuccessMessage(c, "Mã OTP đã được gửi vào email của bạn")
+}
+
+// ResetPassword xử lý việc xác thực OTP và đổi mật khẩu mới
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req dto.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ")
+		return
+	}
+
+	// Gọi xuống Usecase
+	err := h.authUsecase.ChangePasswordWithOTP(c.Request.Context(), req.Email, req.OTP, req.NewPassword)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Dùng SuccessMessage vì không cần trả về Data
+	response.SuccessMessage(c, "Chúc mừng! Bạn đã đổi mật khẩu thành công")
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"github.com/No2004LTC/gopher-social-ecom/internal/dto"
@@ -76,6 +77,35 @@ func (r *userRepository) GetUserByIdentifier(ctx context.Context, identifier str
 	return &user, nil
 }
 
+// GetUserProfileByUsername lấy thông tin profile và check xem currentUserID có đang follow người này không
+func (r *userRepository) GetUserProfileByUsername(ctx context.Context, currentUserID int64, username string) (*domain.User, error) {
+	var user domain.User
+
+	// Câu SQL lấy thông tin user kèm trạng thái Follow
+	query := `
+        *,
+        EXISTS (
+            SELECT 1 FROM follows 
+            WHERE follower_id = ? AND following_id = users.id
+        ) as is_following
+    `
+
+	err := r.db.WithContext(ctx).
+		Model(&domain.User{}).
+		Select(query, currentUserID).
+		Where("username = ?", username).
+		First(&user).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil // Trả về nil nếu không tìm thấy, không đánh lỗi hệ thống
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // UpdateAvatar cập nhật avatar URL cho user
 func (r *userRepository) UpdateAvatar(ctx context.Context, userID int64, avatarURL string) error {
 	log.Printf("[UpdateAvatar] Updating avatar for user ID: %d, URL: %s\n", userID, avatarURL)
@@ -112,19 +142,52 @@ func (r *userRepository) UpdateAvatar(ctx context.Context, userID int64, avatarU
 	return nil
 }
 
-// update thong tin profile user
-func (r *userRepository) Update(ctx context.Context, user *domain.User) error {
-	//Cac truong duoc select
-	result := r.db.WithContext(ctx).Model(user).Select("username", "UpdatedAt").Updates(user)
+// UpdateCover cập nhật ảnh bìa (cover URL) cho user
+func (r *userRepository) UpdateCover(ctx context.Context, userID int64, coverURL string) error {
+	log.Printf("[UpdateCover] Updating cover for user ID: %d, URL: %s\n", userID, coverURL)
+
+	user := &domain.User{ID: userID}
+
+	if err := r.db.WithContext(ctx).First(user, userID).Error; err != nil {
+		log.Printf("[UpdateCover] User not found: %v\n", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("no user found with that ID")
+		}
+		return err
+	}
+
+	user.CoverURL = coverURL
+	result := r.db.WithContext(ctx).Model(user).Update("cover_url", coverURL)
 
 	if result.Error != nil {
+		log.Printf("[UpdateCover] ERROR: %v\n", result.Error)
 		return result.Error
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("Khong tim thay user de cap nhat")
+		return errors.New("failed to update user cover")
 	}
 
+	log.Printf("[UpdateCover] Successfully updated cover for user ID: %d\n", userID)
+	return nil
+}
+
+// update thong tin profile user
+func (r *userRepository) UpdateProfile(ctx context.Context, userID int64, updates map[string]interface{}) error {
+	// GORM tự động cập nhật updated_at, nhưng ta cứ thêm cho chắc
+	updates["updated_at"] = time.Now()
+
+	result := r.db.WithContext(ctx).
+		Table("users").
+		Where("id = ?", userID).
+		Updates(updates)
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("không tìm thấy người dùng để cập nhật")
+	}
 	return nil
 }
 
@@ -233,4 +296,21 @@ func (r *userRepository) GetSuggestedUsers(ctx context.Context, myUserID int64, 
 	}
 
 	return suggestions, nil
+}
+
+func (r *userRepository) UpdatePassword(ctx context.Context, userID int64, newPasswordHash string) error {
+	result := r.db.WithContext(ctx).
+		Model(&domain.User{}).
+		Where("id = ?", userID).
+		Update("password_hash", newPasswordHash)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("không tìm thấy người dùng để cập nhật mật khẩu")
+	}
+
+	return nil
 }

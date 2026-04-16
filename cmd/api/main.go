@@ -11,6 +11,7 @@ import (
 	"github.com/No2004LTC/gopher-social-ecom/internal/repository/postgres"
 	"github.com/No2004LTC/gopher-social-ecom/internal/usecase"
 	"github.com/No2004LTC/gopher-social-ecom/pkg/db"
+	"github.com/No2004LTC/gopher-social-ecom/pkg/mail"
 	"github.com/No2004LTC/gopher-social-ecom/pkg/storage"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -55,10 +56,10 @@ func main() {
 
 	// C. Hệ thống User & Auth (QUAN TRỌNG NHẤT Ở ĐÂY)
 	userRepo := postgres.NewUserRepository(db)
-
+	emailSender := mail.NewGmailSender(cfg)
 	// 👉 CẬP NHẬT: Đảm bảo NewAuthUsecase nhận ĐỦ 3 tham số: repo, config, và redisClient
 	// Nếu NewAuthUsecase của cậu chưa nhận redisClient, hãy vào file đó thêm vào struct nhé!
-	authUsecase := usecase.NewAuthUsecase(userRepo, cfg, redisClient)
+	authUsecase := usecase.NewAuthUsecase(userRepo, cfg, redisClient, emailSender)
 
 	s3Client, err := storage.NewS3Client(cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, cfg.MinioUseSSL)
 	if err != nil {
@@ -113,6 +114,8 @@ func main() {
 			{
 				auth.POST("/register", authHandler.Register)
 				auth.POST("/login", authHandler.Login)
+				auth.POST("/send-otp", authHandler.SendPasswordOTP)
+				auth.POST("/reset-password", authHandler.ResetPassword)
 			}
 
 			// User & Follow Routes
@@ -123,9 +126,11 @@ func main() {
 				users.GET("/search", authHandler.SearchUsers)
 				users.PATCH("/profile", authHandler.UpdateProfile)
 				users.POST("/avatar", authHandler.UploadAvatar)
+				users.POST("/cover", authHandler.UploadCover)
 
 				users.GET("/following", authHandler.GetFollowing)
 				users.GET("/followers", authHandler.GetFollowers)
+				users.GET("/profile/:username", authHandler.GetUserProfile)
 
 				users.GET("/suggestions", authHandler.GetSuggestions)
 				users.GET("/online-contacts", authHandler.GetOnlineFriends)

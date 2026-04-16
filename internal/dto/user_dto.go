@@ -50,3 +50,20 @@ type SuggestedUserResponse struct {
 	AvatarURL          string `json:"avatar_url"`
 	MutualFriendsCount int    `json:"mutual_friends_count"`
 }
+
+type UpdateProfileInput struct {
+	// Dùng con trỏ *string để bắt trường hợp partial update
+	Username  *string `json:"username" binding:"omitempty,min=3"`
+	Bio       *string `json:"bio"`
+	AvatarURL *string `json:"avatar_url"`
+}
+
+type SendOTPRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type ResetPasswordRequest struct {
+	Email       string `json:"email" binding:"required,email"`
+	OTP         string `json:"otp" binding:"required,len=6"`
+	NewPassword string `json:"new_password" binding:"required,min=6"`
+}

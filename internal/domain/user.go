@@ -14,6 +14,7 @@ type User struct {
 	Email        string    `gorm:"column:email;uniqueIndex" json:"email"`
 	PasswordHash string    `gorm:"column:password_hash" json:"-"`
 	AvatarURL    string    `gorm:"column:avatar_url" json:"avatar_url"`
+	CoverURL     string    `gorm:"column:cover_url" json:"cover_url"`
 	Bio          string    `json:"bio"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
@@ -35,11 +36,14 @@ type UserRepository interface {
 	GetUserByIdentifier(ctx context.Context, identifier string) (*User, error)
 	GetByID(ctx context.Context, id int64) (*User, error)
 	UpdateAvatar(ctx context.Context, userID int64, avatarURL string) error
-	Update(ctx context.Context, user *User) error
+	UpdateCover(ctx context.Context, userID int64, coverURL string) error
+	UpdateProfile(ctx context.Context, userID int64, updates map[string]interface{}) error
 	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]dto.UserCompact, error)
 	GetFollowing(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
 	GetFollowers(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
 	GetSuggestedUsers(ctx context.Context, userID int64, limit int) ([]SuggestedUser, error)
+	GetUserProfileByUsername(ctx context.Context, currentUserID int64, username string) (*User, error)
+	UpdatePassword(ctx context.Context, userID int64, newPasswordHash string) error
 }
 
 // UserUsecase (Chứa business logic)
@@ -47,11 +51,15 @@ type UserUsecase interface {
 	Register(ctx context.Context, username, email, password string) error
 	Login(ctx context.Context, identifier, password string) (string, *User, error) // Trả về JWT Token
 	UpdateAvatar(ctx context.Context, userID int64, avatarURL string) error
+	UpdateCover(ctx context.Context, userID int64, coverURL string) error
 	GetProfile(ctx context.Context, userID int64) (*User, error)
-	UpdateProfile(ctx context.Context, userID int64, username string) error
+	UpdateProfile(ctx context.Context, userID int64, input dto.UpdateProfileInput) error
 	SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]dto.UserCompact, error)
 	GetFollowing(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
 	GetFollowers(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error)
 	GetFriendSuggestions(ctx context.Context, userID int64) ([]SuggestedUser, error)
 	GetOnlineContacts(ctx context.Context, userID int64) ([]dto.UserCompact, error)
+	GetUserProfileByUsername(ctx context.Context, currentUserID int64, username string) (*User, error)
+	SendPasswordOTP(ctx context.Context, email string) error
+	ChangePasswordWithOTP(ctx context.Context, email, otp, newPassword string) error
 }

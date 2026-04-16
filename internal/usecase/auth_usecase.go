@@ -3,7 +3,9 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"math/rand"
 	"strconv"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"github.com/No2004LTC/gopher-social-ecom/internal/dto"
 	"github.com/No2004LTC/gopher-social-ecom/pkg/auth"
+	"github.com/No2004LTC/gopher-social-ecom/pkg/mail"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -19,14 +22,16 @@ type authUsecase struct {
 	userRepo    domain.UserRepository
 	cfg         *config.Config
 	redisClient *redis.Client
+	emailSender mail.EmailSender
 }
 
 // NewAuthUsecase khởi tạo tầng nghiệp vụ Authentication
-func NewAuthUsecase(repo domain.UserRepository, cfg *config.Config, rdb *redis.Client) domain.UserUsecase {
+func NewAuthUsecase(repo domain.UserRepository, cfg *config.Config, rdb *redis.Client, mailSender mail.EmailSender) domain.UserUsecase {
 	return &authUsecase{
 		userRepo:    repo,
 		cfg:         cfg,
 		redisClient: rdb,
+		emailSender: mailSender,
 	}
 }
 
@@ -108,6 +113,25 @@ func (u *authUsecase) UpdateAvatar(ctx context.Context, userID int64, url string
 	return u.userRepo.UpdateAvatar(ctx, userID, url)
 }
 
+func (u *authUsecase) UpdateCover(ctx context.Context, userID int64, url string) error {
+	if userID <= 0 {
+		return errors.New("invalid user ID")
+	}
+	if url == "" {
+		return errors.New("cover URL cannot be empty")
+	}
+
+	user, err := u.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("user not found")
+	}
+
+	return u.userRepo.UpdateCover(ctx, userID, url)
+}
+
 // Trả về thông tin user
 func (u *authUsecase) GetProfile(ctx context.Context, userID int64) (*domain.User, error) {
 	user, err := u.userRepo.GetByID(ctx, userID)
@@ -118,14 +142,42 @@ func (u *authUsecase) GetProfile(ctx context.Context, userID int64) (*domain.Use
 	return user, nil
 }
 
-// Cập nhật username
-func (u *authUsecase) UpdateProfile(ctx context.Context, userID int64, username string) error {
-	user := &domain.User{
-		ID:       userID,
-		Username: username,
+func (uc *authUsecase) GetUserProfileByUsername(ctx context.Context, currentUserID int64, username string) (*domain.User, error) {
+	user, err := uc.userRepo.GetUserProfileByUsername(ctx, currentUserID, username)
+	if err != nil {
+		return nil, errors.New("lỗi hệ thống khi lấy thông tin người dùng")
 	}
 
-	return u.userRepo.Update(ctx, user)
+	if user == nil {
+		return nil, errors.New("không tìm thấy người dùng này")
+	}
+
+	// Bảo mật: Ẩn mật khẩu trước khi trả về Frontend
+	user.PasswordHash = ""
+	return user, nil
+}
+
+// Cập nhật username
+func (uc *authUsecase) UpdateProfile(ctx context.Context, userID int64, input dto.UpdateProfileInput) error {
+	updates := make(map[string]interface{})
+
+	// Chỉ nhét vào map những trường nào THỰC SỰ được Frontend gửi lên
+	if input.Username != nil {
+		updates["username"] = *input.Username
+	}
+	if input.Bio != nil {
+		updates["bio"] = *input.Bio
+	}
+	if input.AvatarURL != nil {
+		updates["avatar_url"] = *input.AvatarURL
+	}
+
+	// Nếu không có gì thay đổi thì bỏ qua luôn, đỡ tốn query DB
+	if len(updates) == 0 {
+		return nil
+	}
+
+	return uc.userRepo.UpdateProfile(ctx, userID, updates)
 }
 
 // Tìm kiếm người dùng
@@ -194,4 +246,88 @@ func (uc *authUsecase) GetOnlineContacts(ctx context.Context, userID int64) ([]d
 		}
 	}
 	return onlineList, nil
+}
+
+func (uc *authUsecase) SendPasswordOTP(ctx context.Context, email string) error {
+	// 1. Kiểm tra xem email có tồn tại không
+	user, err := uc.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("email không tồn tại trong hệ thống")
+	}
+
+	// 2. Tạo OTP ngẫu nhiên 6 số
+	// *Lưu ý: Để rand.Intn không lặp, ta lấy UnixNano làm seed
+	rand.NewSource(time.Now().UnixNano())
+	otp := fmt.Sprintf("%06d", rand.Intn(1000000))
+
+	// 3. Lưu vào Redis, tự hủy sau 5 phút
+	redisKey := fmt.Sprintf("otp:password_reset:%s", email)
+	err = uc.redisClient.Set(ctx, redisKey, otp, 5*time.Minute).Err()
+	if err != nil {
+		log.Printf("Lỗi lưu OTP vào Redis: %v", err)
+		return errors.New("lỗi hệ thống khi tạo mã")
+	}
+
+	// 4. Soạn thư và Gửi (Chạy ngầm)
+	subject := "🔒 Mã xác thực đổi mật khẩu - Gopher Social"
+	content := fmt.Sprintf(`
+		<h3>Xin chào %s,</h3>
+		<p>Bạn vừa yêu cầu đổi mật khẩu cho tài khoản Gopher Social.</p>
+		<p>Mã OTP của bạn là: <b style="font-size:24px; color:blue;">%s</b></p>
+		<p><i>Mã này sẽ hết hạn sau 5 phút. Vui lòng không chia sẻ mã này!</i></p>
+	`, user.Username, otp)
+
+	go func() {
+		// uc.emailSender sẽ tự động lấy cấu hình hệ thống từ struct Config
+		err := uc.emailSender.SendEmail(email, subject, content)
+		if err != nil {
+			log.Printf("Lỗi gửi email cho %s: %v", email, err)
+		}
+	}()
+
+	return nil
+}
+
+// ChangePasswordWithOTP kiểm tra OTP và cập nhật mật khẩu mới
+func (uc *authUsecase) ChangePasswordWithOTP(ctx context.Context, email, otp, newPassword string) error {
+	redisKey := fmt.Sprintf("otp:password_reset:%s", email)
+
+	// 1. Lấy OTP từ Redis
+	storedOTP, err := uc.redisClient.Get(ctx, redisKey).Result()
+	if err == redis.Nil {
+		return errors.New("mã OTP đã hết hạn hoặc không tồn tại")
+	} else if err != nil {
+		return errors.New("lỗi hệ thống khi xác thực OTP")
+	}
+
+	// 2. Đối chiếu
+	if storedOTP != otp {
+		return errors.New("mã OTP không chính xác")
+	}
+
+	// 3. Lấy thông tin User để lấy ID
+	user, err := uc.userRepo.GetByEmail(ctx, email)
+	if err != nil || user == nil {
+		return errors.New("không tìm thấy người dùng")
+	}
+
+	// 4. Băm mật khẩu (Sử dụng hàm HashPassword của cậu đã viết trong package auth)
+	hashedPassword, err := auth.HashPassword(newPassword)
+	if err != nil {
+		return errors.New("lỗi mã hóa mật khẩu")
+	}
+
+	// 5. Cập nhật vào DB
+	err = uc.userRepo.UpdatePassword(ctx, user.ID, string(hashedPassword))
+	if err != nil {
+		return err
+	}
+
+	// 6. Xóa OTP khỏi Redis sau khi đổi xong
+	_ = uc.redisClient.Del(ctx, redisKey).Err()
+
+	return nil
 }
