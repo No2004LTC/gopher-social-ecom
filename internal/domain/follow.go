@@ -16,6 +16,8 @@ type FollowRepository interface {
 	Unfollow(ctx context.Context, followerID, followingID int64) error
 	IsFollowing(ctx context.Context, followerID, followingID int64) (bool, error)
 	GetFollowingIDs(ctx context.Context, userID int64) ([]int64, error)
+	CountFollowers(ctx context.Context, userID int64) (int64, error)
+	CountFollowing(ctx context.Context, userID int64) (int64, error)
 }
 
 type FollowUsecase interface {

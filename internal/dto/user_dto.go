@@ -1,40 +1,17 @@
 package dto
 
-// --- INPUT (REQUEST) ---
+// --- USER REQUESTS ---
 
-type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+type UpdateProfileInput struct {
+	// Sử dụng con trỏ để hỗ trợ PATCH (chỉ cập nhật những trường gửi lên)
+	Username  *string `json:"username" binding:"omitempty,min=3"`
+	Bio       *string `json:"bio"`
+	AvatarURL *string `json:"avatar_url"`
 }
 
-type RegisterRequest struct {
-	Username string `json:"username" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
-}
+// --- USER RESPONSES ---
 
-type UpdateProfileRequest struct {
-	Username string `json:"username" binding:"required"`
-}
-
-// --- OUTPUT (RESPONSE) ---
-
-// AuthUserResponse: Thông tin cơ bản của user đi kèm sau khi login thành công
-type AuthUserResponse struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	AvatarURL string `json:"avatar_url"`
-}
-
-// LoginResponse: Cục JSON trả về cho React chứa Token và User
-type LoginResponse struct {
-	AccessToken string           `json:"access_token"`
-	TokenType   string           `json:"token_type"`
-	User        AuthUserResponse `json:"user"`
-}
-
-// UserCompact: Dùng cho danh sách tìm kiếm, gợi ý kết bạn, hoặc danh sách follow
+// UserCompact: Dùng cho các danh sách (Search, Followers, Suggestions)
 type UserCompact struct {
 	ID           int64  `json:"id"`
 	Username     string `json:"username"`
@@ -44,6 +21,7 @@ type UserCompact struct {
 	IsOnline     bool   `json:"is_online"`
 }
 
+// SuggestedUserResponse: Dành riêng cho mục gợi ý kết bạn
 type SuggestedUserResponse struct {
 	ID                 int64  `json:"id"`
 	Username           string `json:"username"`
@@ -51,19 +29,15 @@ type SuggestedUserResponse struct {
 	MutualFriendsCount int    `json:"mutual_friends_count"`
 }
 
-type UpdateProfileInput struct {
-	// Dùng con trỏ *string để bắt trường hợp partial update
-	Username  *string `json:"username" binding:"omitempty,min=3"`
-	Bio       *string `json:"bio"`
-	AvatarURL *string `json:"avatar_url"`
-}
-
-type SendOTPRequest struct {
-	Email string `json:"email" binding:"required,email"`
-}
-
-type ResetPasswordRequest struct {
-	Email       string `json:"email" binding:"required,email"`
-	OTP         string `json:"otp" binding:"required,len=6"`
-	NewPassword string `json:"new_password" binding:"required,min=6"`
+// UserProfileResponse: "Trùm cuối" của trang Profile cá nhân
+type UserProfileResponse struct {
+	ID             int64  `json:"id"`
+	Username       string `json:"username"`
+	Bio            string `json:"bio"`
+	AvatarURL      string `json:"avatar_url"`
+	CoverURL       string `json:"cover_url"`
+	FollowersCount int    `json:"followers_count"`
+	FollowingCount int    `json:"following_count"`
+	PostsCount     int    `json:"posts_count"`
+	IsFollowing    bool   `json:"is_following"`
 }

@@ -77,3 +77,21 @@ func (r *notificationRepository) GetUserNotifications(ctx context.Context, userI
 
 	return responses, nil
 }
+
+// GetUnreadCount lấy tổng số thông báo chưa đọc của 1 user
+func (r *notificationRepository) GetUnreadCount(ctx context.Context, userID int64) (int, error) {
+	var count int64
+	// Đếm số dòng có user_id = mình và is_read = false
+	err := r.db.WithContext(ctx).Model(&domain.Notification{}).
+		Where("user_id = ? AND is_read = false", userID).
+		Count(&count).Error
+
+	return int(count), err
+}
+
+func (r *notificationRepository) MarkAllAsRead(ctx context.Context, userID int64) error {
+	// Tìm tất cả thông báo CỦA MÌNH đang chưa đọc và update thành true
+	return r.db.WithContext(ctx).Model(&domain.Notification{}).
+		Where("user_id = ? AND is_read = false", userID).
+		Update("is_read", true).Error
+}

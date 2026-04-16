@@ -43,3 +43,21 @@ func (r *followRepository) GetFollowingIDs(ctx context.Context, userID int64) ([
 		Pluck("following_id", &followingIDs).Error
 	return followingIDs, err
 }
+
+func (r *followRepository) CountFollowers(ctx context.Context, userID int64) (int64, error) {
+	var count int64
+	// Đếm xem có bao nhiêu dòng mà userID này được người khác follow (following_id)
+	err := r.db.WithContext(ctx).Table("follows").
+		Where("following_id = ?", userID).
+		Count(&count).Error
+	return count, err
+}
+
+func (r *followRepository) CountFollowing(ctx context.Context, userID int64) (int64, error) {
+	var count int64
+	// Đếm xem userID này đang đi follow bao nhiêu người (follower_id)
+	err := r.db.WithContext(ctx).Table("follows").
+		Where("follower_id = ?", userID).
+		Count(&count).Error
+	return count, err
+}

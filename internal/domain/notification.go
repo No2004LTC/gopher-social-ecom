@@ -24,6 +24,8 @@ type NotificationRepository interface {
 	GetByUserID(ctx context.Context, userID int64, limit, offset int) ([]Notification, error)
 	MarkAsRead(ctx context.Context, notiID int64) error
 	GetUserNotifications(ctx context.Context, userID int64, limit, offset int) ([]dto.NotificationResponse, error)
+	GetUnreadCount(ctx context.Context, userID int64) (int, error)
+	MarkAllAsRead(ctx context.Context, userID int64) error
 }
 
 type NotificationUsecase interface {
@@ -31,4 +33,6 @@ type NotificationUsecase interface {
 	GetNotifications(ctx context.Context, userID int64, page int) ([]Notification, error)
 	MarkAsRead(ctx context.Context, notiID int64) error
 	GetUserNotifications(ctx context.Context, userID int64, limit, offset int) ([]dto.NotificationResponse, error)
+	GetUnreadCount(ctx context.Context, userID int64) (int, error)
+	MarkAllAsRead(ctx context.Context, userID int64) error
 }

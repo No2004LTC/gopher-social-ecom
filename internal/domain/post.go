@@ -31,6 +31,7 @@ type PostRepository interface {
 
 	// 🎯 Hàm vạn năng duy nhất còn lại ở tầng Repo
 	GetPosts(ctx context.Context, currentUserID int64, targetUserID int64, limit, offset int) ([]Post, error)
+	CountPosts(ctx context.Context, userID int64) (int64, error)
 }
 
 type PostUsecase interface {

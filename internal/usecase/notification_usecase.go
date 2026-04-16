@@ -47,3 +47,13 @@ func (u *notificationUsecase) MarkAsRead(ctx context.Context, notiID int64) erro
 func (u *notificationUsecase) GetUserNotifications(ctx context.Context, userID int64, limit, offset int) ([]dto.NotificationResponse, error) {
 	return u.repo.GetUserNotifications(ctx, userID, limit, offset)
 }
+
+// GetUnreadCount xử lý logic đếm số thông báo
+func (uc *notificationUsecase) GetUnreadCount(ctx context.Context, userID int64) (int, error) {
+	// Ở thông báo thì không cần logic phức tạp như Chat, gọi thẳng Repo là xong
+	return uc.repo.GetUnreadCount(ctx, userID)
+}
+
+func (uc *notificationUsecase) MarkAllAsRead(ctx context.Context, userID int64) error {
+	return uc.repo.MarkAllAsRead(ctx, userID)
+}

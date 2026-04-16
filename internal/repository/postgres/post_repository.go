@@ -90,3 +90,11 @@ func (r *postRepository) GetPosts(ctx context.Context, currentUserID int64, targ
 
 	return posts, err
 }
+
+func (r *postRepository) CountPosts(ctx context.Context, userID int64) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&domain.Post{}).
+		Where("user_id = ?", userID).
+		Count(&count).Error
+	return count, err
+}

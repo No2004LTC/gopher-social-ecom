@@ -101,3 +101,41 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã đọc thông báo"})
 }
+
+// [GET] /api/v1/notifications/unread-count -> Lấy số lượng thông báo chưa đọc
+func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
+	uid, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		return
+	}
+	userID := uid.(int64)
+
+	count, err := h.notiUC.GetUnreadCount(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Lỗi khi đếm thông báo: "+err.Error())
+		return
+	}
+
+	response.Success(c, "Lấy số lượng thành công", gin.H{
+		"unread_count": count,
+	})
+}
+
+// [PUT] /api/v1/notifications/read-all
+func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
+	uid, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		return
+	}
+	userID := uid.(int64)
+
+	err := h.notiUC.MarkAllAsRead(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Lỗi cập nhật thông báo")
+		return
+	}
+
+	response.Success(c, "Đã đánh dấu tất cả", nil)
+}

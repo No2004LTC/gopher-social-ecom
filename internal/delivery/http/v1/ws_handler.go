@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/No2004LTC/gopher-social-ecom/internal/delivery/http/response"
 	"github.com/No2004LTC/gopher-social-ecom/internal/delivery/ws"
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"github.com/gin-gonic/gin"
@@ -117,4 +118,73 @@ func (h *WSHandler) GetHistory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": messages})
+}
+
+// [GET] /api/v1/chats/unread-count -> Đếm tổng số tin nhắn chưa đọc
+func (h *WSHandler) GetUnreadCount(c *gin.Context) {
+	// 1. Lấy userID từ Token
+	uid, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		return
+	}
+	userID := uid.(int64) // Ép kiểu tùy thuộc vào middleware của cậu
+
+	// 2. Gọi Usecase
+	count, err := h.ChatUC.GetUnreadCount(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Lỗi khi đếm tin nhắn chưa đọc: "+err.Error())
+		return
+	}
+
+	// 3. Trả về Frontend
+	response.Success(c, "Lấy số lượng thành công", gin.H{
+		"unread_count": count,
+	})
+}
+
+// [GET] /api/v1/chats/conversations -> Lấy danh sách hội thoại (Đã chia Bạn Bè / Người Lạ)
+func (h *WSHandler) GetConversations(c *gin.Context) {
+	// 1. Lấy userID
+	uid, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		return
+	}
+	userID := uid.(int64)
+
+	// 2. Gọi Usecase phân loại
+	categorizedConvos, err := h.ChatUC.GetCategorizedConversations(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Lỗi khi tải danh sách hội thoại: "+err.Error())
+		return
+	}
+
+	// 3. Trả về Frontend. Lúc này data sẽ có dạng { "friends": [...], "strangers": [...] }
+	response.Success(c, "Lấy danh sách hội thoại thành công", categorizedConvos)
+}
+
+// [PUT] /api/v1/chats/:id/read -> Đánh dấu đã đọc tin nhắn của một người
+func (h *WSHandler) MarkAsRead(c *gin.Context) {
+	uid, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		return
+	}
+	myUserID := uid.(int64)
+
+	partnerIDStr := c.Param("id")
+	partnerID, err := strconv.ParseInt(partnerIDStr, 10, 64)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "ID người dùng không hợp lệ")
+		return
+	}
+
+	err = h.ChatUC.MarkMessagesAsRead(c.Request.Context(), myUserID, partnerID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Lỗi cập nhật trạng thái tin nhắn")
+		return
+	}
+
+	response.Success(c, "Đã xem", nil)
 }
