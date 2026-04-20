@@ -1,4 +1,5 @@
 services:
+  # Db service - PostgreSQL
   postgres:
     image: postgres:15-alpine
     container_name: gopher-postgres
@@ -11,12 +12,14 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  #  Cache service - Redis
   redis:
     image: redis:7-alpine
     container_name: gopher-redis
     ports:
       - "6379:6379"
 
+  #  Object storage service - MinIO
   minio:
     image: minio/minio
     container_name: gopher-minio
@@ -30,6 +33,16 @@ services:
     volumes:
       - minio_data:/data
 
+  #  Message broker service - RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: connectvn_rabbitmq
+    ports:
+      - "5672:5672"   # Cổng cho code Golang gọi vào
+      - "15672:15672" # Cổng giao diện Web để cậu xem tin nhắn
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
 volumes:
   pgdata:
   minio_data:

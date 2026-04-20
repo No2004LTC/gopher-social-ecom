@@ -29,6 +29,12 @@ type Config struct {
 	SMTPUser     string `mapstructure:"SMTP_USER"`
 	SMTPPassword string `mapstructure:"SMTP_PASSWORD"`
 	SenderEmail  string `mapstructure:"SENDER_EMAIL"`
+
+	//Hứng deploy
+	Env string `mapstructure:"ENV"`
+
+	// RABBITMQ
+	RabbitMQUrl string `mapstructure:"RABBITMQ_URL"`
 }
 
 // LoadConfig sẽ tìm file .env và nạp giá trị vào struct Config
