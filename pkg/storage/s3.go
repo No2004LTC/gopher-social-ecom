@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"mime/multipart" // Thêm cái này để nhận file từ Handler
+	"mime/multipart"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -48,9 +48,13 @@ func (s *S3Client) UploadFile(file *multipart.FileHeader, folder string) (string
 	return fmt.Sprintf("http://%s/%s/%s", s.endpoint, s.bucketName, objectName), nil
 }
 
+// PutObject
 func (s *S3Client) PutObject(ctx context.Context, objectName string, r io.Reader, objectSize int64, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
 	return s.client.PutObject(ctx, s.bucketName, objectName, r, objectSize, opts)
 }
 
+// Endpoint
 func (s *S3Client) Endpoint() string { return s.endpoint }
-func (s *S3Client) Bucket() string   { return s.bucketName }
+
+// Bucket
+func (s *S3Client) Bucket() string { return s.bucketName }

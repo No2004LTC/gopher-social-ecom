@@ -26,6 +26,7 @@ type Client struct {
 	UserID int64
 }
 
+// ServeWS
 func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, userID int64) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -39,6 +40,7 @@ func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, userID int64) {
 	go client.readPump()
 }
 
+// readPump
 func (c *Client) readPump() {
 	defer func() {
 		c.Hub.Unregister <- c
@@ -55,6 +57,7 @@ func (c *Client) readPump() {
 	}
 }
 
+// writePump
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {

@@ -33,7 +33,7 @@ type SuggestedUser struct {
 	MutualFriendsCount int    `json:"mutual_friends_count"`
 }
 
-// UserRepository: Chỉ chứa các hàm về thông tin người dùng
+// UserRepository
 type UserRepository interface {
 	GetByID(ctx context.Context, id int64) (*User, error)
 	GetUserProfileByUsername(ctx context.Context, currentUserID int64, username string) (*User, error)
@@ -46,7 +46,7 @@ type UserRepository interface {
 	GetSuggestedUsers(ctx context.Context, userID int64, limit int) ([]SuggestedUser, error)
 }
 
-// UserUsecase: Business logic về Profile/Mạng xã hội
+// UserUsecase
 type UserUsecase interface {
 	GetProfile(ctx context.Context, userID int64) (*User, error)
 	GetUserProfileByUsername(ctx context.Context, currentUserID int64, username string) (*dto.UserProfileResponse, error)

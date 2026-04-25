@@ -1,15 +1,16 @@
 package v1
 
 import (
+	"net/http"
+
 	"github.com/No2004LTC/gopher-social-ecom/internal/delivery/http/response"
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"github.com/No2004LTC/gopher-social-ecom/internal/dto"
 	"github.com/gin-gonic/gin"
-	"net/http"
 )
 
 type AuthHandler struct {
-	authUsecase domain.AuthUsecase // 👉 Dùng AuthUsecase chuyên biệt
+	authUsecase domain.AuthUsecase
 }
 
 func NewAuthHandler(u domain.AuthUsecase) *AuthHandler {

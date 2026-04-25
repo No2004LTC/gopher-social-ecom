@@ -18,6 +18,7 @@ func NewNotificationHandler(notiUC domain.NotificationUsecase) *NotificationHand
 	return &NotificationHandler{notiUC: notiUC}
 }
 
+// GetNotifications
 func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 	uid, exists := c.Get("user_id")
 	if !exists {
@@ -38,6 +39,7 @@ func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 	response.Success(c, "Lấy thông báo thành công", notifications)
 }
 
+// GetDiscoveryFeed
 func (h *PostHandler) GetDiscoveryFeed(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -81,6 +83,7 @@ func (h *PostHandler) GetDiscoveryFeed(c *gin.Context) {
 	})
 }
 
+// MarkAsRead
 func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 	notiID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
@@ -93,7 +96,7 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã đọc thông báo"})
 }
 
-// [GET] /api/v1/notifications/unread-count -> Lấy số lượng thông báo chưa đọc
+// GetUnreadCount
 func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 	uid, exists := c.Get("user_id")
 	if !exists {
@@ -113,7 +116,7 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 	})
 }
 
-// [PUT] /api/v1/notifications/read-all
+// MarkAllAsRead
 func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 	uid, exists := c.Get("user_id")
 	if !exists {

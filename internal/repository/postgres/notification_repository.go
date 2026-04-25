@@ -16,10 +16,12 @@ func NewNotificationRepository(db *gorm.DB) domain.NotificationRepository {
 	return &notificationRepository{db: db}
 }
 
+// Create
 func (r *notificationRepository) Create(ctx context.Context, noti *domain.Notification) error {
 	return r.db.WithContext(ctx).Create(noti).Error
 }
 
+// GetByUserID
 func (r *notificationRepository) GetByUserID(ctx context.Context, userID int64, limit, offset int) ([]domain.Notification, error) {
 	var notifications []domain.Notification
 	err := r.db.WithContext(ctx).
@@ -31,11 +33,13 @@ func (r *notificationRepository) GetByUserID(ctx context.Context, userID int64, 
 	return notifications, err
 }
 
+// MarkAsRead
 func (r *notificationRepository) MarkAsRead(ctx context.Context, notiID int64) error {
 	return r.db.WithContext(ctx).Model(&domain.Notification{}).
 		Where("id = ?", notiID).Update("is_read", true).Error
 }
 
+// GetUserNotifications
 func (r *notificationRepository) GetUserNotifications(ctx context.Context, userID int64, limit, offset int) ([]dto.NotificationResponse, error) {
 	var notis []domain.Notification
 	err := r.db.WithContext(ctx).
@@ -74,6 +78,7 @@ func (r *notificationRepository) GetUserNotifications(ctx context.Context, userI
 	return responses, nil
 }
 
+// GetUnreadCount
 func (r *notificationRepository) GetUnreadCount(ctx context.Context, userID int64) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&domain.Notification{}).
@@ -83,6 +88,7 @@ func (r *notificationRepository) GetUnreadCount(ctx context.Context, userID int6
 	return int(count), err
 }
 
+// MarkAllAsRead
 func (r *notificationRepository) MarkAllAsRead(ctx context.Context, userID int64) error {
 	return r.db.WithContext(ctx).Model(&domain.Notification{}).
 		Where("user_id = ? AND is_read = false", userID).

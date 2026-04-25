@@ -16,6 +16,7 @@ type Message struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// ChatRepository
 type ChatRepository interface {
 	SaveMessage(ctx context.Context, msg *Message) error
 	GetHistory(ctx context.Context, user1, user2 int64, limit int) ([]Message, error)
@@ -24,6 +25,7 @@ type ChatRepository interface {
 	MarkMessagesAsRead(ctx context.Context, myUserID, partnerID int64) error
 }
 
+// ChatUsecase
 type ChatUsecase interface {
 	SaveMessage(ctx context.Context, msg *Message) error
 	GetChatHistory(ctx context.Context, user1, user2 int64, limit int) ([]Message, error)

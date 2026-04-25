@@ -19,6 +19,7 @@ func NewFollowUsecase(repo domain.FollowRepository, notiUC domain.NotificationUs
 	}
 }
 
+// FollowUser
 func (u *followUsecase) FollowUser(ctx context.Context, followerID, followingID int64) error {
 	if followerID == followingID {
 		return errors.New("cannot follow yourself")
@@ -46,10 +47,12 @@ func (u *followUsecase) FollowUser(ctx context.Context, followerID, followingID 
 	return nil
 }
 
+// UnfollowUser
 func (u *followUsecase) UnfollowUser(ctx context.Context, followerID, followingID int64) error {
 	return u.repo.Unfollow(ctx, followerID, followingID)
 }
 
+// GetFollowingList
 func (u *followUsecase) GetFollowingList(ctx context.Context, userID int64) ([]int64, error) {
 	return u.repo.GetFollowingIDs(ctx, userID)
 }

@@ -23,13 +23,13 @@ func NewWSHandler(hub *ws.Hub, chatUC domain.ChatUsecase) *WSHandler {
 	}
 }
 
-// ServeWS: Nâng cấp kết nối WebSocket
+// ServeWS
 func (h *WSHandler) ServeWS(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	ws.ServeWS(h.hub, c.Writer, c.Request, userID)
 }
 
-// SendMessage: Gửi tin nhắn và báo Real-time
+// SendMessage
 func (h *WSHandler) SendMessage(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 
@@ -51,7 +51,6 @@ func (h *WSHandler) SendMessage(c *gin.Context) {
 		IsRead:     false,
 	}
 
-	// Gọi đúng hàm SaveMessage trong interface của cậu
 	err := h.chatUC.SaveMessage(c.Request.Context(), msg)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -67,7 +66,7 @@ func (h *WSHandler) SendMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, msg)
 }
 
-// GetHistory: Lấy lịch sử chat (Có limit như interface)
+// GetHistory
 func (h *WSHandler) GetHistory(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	toUserID, _ := strconv.ParseInt(c.Param("to_user_id"), 10, 64)
@@ -81,7 +80,7 @@ func (h *WSHandler) GetHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, messages)
 }
 
-// GetConversations: Lấy danh sách chat đã phân loại (Sửa theo map của cậu)
+// GetConversations
 func (h *WSHandler) GetConversations(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 
@@ -94,7 +93,7 @@ func (h *WSHandler) GetConversations(c *gin.Context) {
 	c.JSON(http.StatusOK, categorized)
 }
 
-// GetUnreadCount: Lấy tổng số tin nhắn chưa đọc
+// GetUnreadCount
 func (h *WSHandler) GetUnreadCount(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 
@@ -107,7 +106,7 @@ func (h *WSHandler) GetUnreadCount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"unread_count": count})
 }
 
-// MarkAsRead: Đánh dấu đã xem
+// MarkAsRead
 func (h *WSHandler) MarkAsRead(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	partnerID, _ := strconv.ParseInt(c.Param("id"), 10, 64)

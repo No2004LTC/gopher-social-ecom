@@ -19,6 +19,7 @@ type Notification struct {
 	Actor     *User     `json:"actor,omitempty" gorm:"foreignKey:ActorID"`
 }
 
+// NotificationRepository
 type NotificationRepository interface {
 	Create(ctx context.Context, noti *Notification) error
 	GetByUserID(ctx context.Context, userID int64, limit, offset int) ([]Notification, error)
@@ -28,6 +29,7 @@ type NotificationRepository interface {
 	MarkAllAsRead(ctx context.Context, userID int64) error
 }
 
+// NotificationUsecase
 type NotificationUsecase interface {
 	SendNotification(ctx context.Context, noti *Notification) error
 	GetNotifications(ctx context.Context, userID int64, page int) ([]Notification, error)

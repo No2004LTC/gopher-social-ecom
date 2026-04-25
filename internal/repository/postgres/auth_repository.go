@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 	"gorm.io/gorm"
 )
@@ -15,12 +16,12 @@ func NewAuthRepository(db *gorm.DB) domain.AuthRepository {
 	return &authRepository{db: db}
 }
 
-// 1. Dùng cho Đăng ký
+// Đăng ký
 func (r *authRepository) Create(ctx context.Context, user *domain.User) error {
 	return r.db.WithContext(ctx).Create(user).Error
 }
 
-// 2. Dùng để check trùng Email khi Đăng ký / Quên mật khẩu
+// GetByEmail
 func (r *authRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
 	err := r.db.WithContext(ctx).Where("email = ?", email).Limit(1).Find(&user).Error
@@ -33,7 +34,7 @@ func (r *authRepository) GetByEmail(ctx context.Context, email string) (*domain.
 	return &user, nil
 }
 
-// 3. Dùng cho Đăng nhập
+// GetUserByIdentifier
 func (r *authRepository) GetUserByIdentifier(ctx context.Context, identifier string) (*domain.User, error) {
 	var user domain.User
 	err := r.db.WithContext(ctx).
@@ -49,7 +50,7 @@ func (r *authRepository) GetUserByIdentifier(ctx context.Context, identifier str
 	return &user, nil
 }
 
-// 4. Dùng cho Đổi / Reset mật khẩu
+// Reset pass
 func (r *authRepository) UpdatePassword(ctx context.Context, userID int64, newPasswordHash string) error {
 	result := r.db.WithContext(ctx).
 		Model(&domain.User{}).

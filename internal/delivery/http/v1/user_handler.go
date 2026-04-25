@@ -22,7 +22,7 @@ func NewUserHandler(u domain.UserUsecase, s3 *storage.S3Client) *UserHandler {
 	return &UserHandler{userUsecase: u, s3Client: s3}
 }
 
-// 1. Lấy profile chính mình
+// GetMe
 func (h *UserHandler) GetMe(c *gin.Context) {
 	uid, _ := c.Get("user_id")
 	userID := uid.(int64)
@@ -36,7 +36,7 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 	response.Success(c, "Lấy thông tin thành công", user)
 }
 
-// 2. Tìm kiếm người dùng
+// SearchUsers
 func (h *UserHandler) SearchUsers(c *gin.Context) {
 	query := c.Query("q")
 	if query == "" {
@@ -52,7 +52,7 @@ func (h *UserHandler) SearchUsers(c *gin.Context) {
 	response.Success(c, "Tìm kiếm thành công", users)
 }
 
-// 3. Cập nhật Profile (PATCH)
+// UpdateProfile
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	var input dto.UpdateProfileInput
@@ -109,7 +109,7 @@ func (h *UserHandler) UploadCover(c *gin.Context) {
 	response.Success(c, "Cover updated", gin.H{"url": url})
 }
 
-// 6. Xem profile chi tiết người khác (HÀM CẬU CẦN ĐÂY)
+// GetUserProfile
 func (h *UserHandler) GetUserProfile(c *gin.Context) {
 	uid, _ := c.Get("user_id")
 	currentUserID := uid.(int64)
@@ -123,7 +123,7 @@ func (h *UserHandler) GetUserProfile(c *gin.Context) {
 	response.Success(c, "Thành công", userProfile)
 }
 
-// 7. Get by ID
+// Get by ID
 func (h *UserHandler) GetUserByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
@@ -136,7 +136,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	response.Success(c, "Thành công", user)
 }
 
-// 8. Following / Followers
+// GetFollowing
 func (h *UserHandler) GetFollowing(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	users, err := h.userUsecase.GetFollowing(c.Request.Context(), userID, 20, 0)
@@ -147,6 +147,7 @@ func (h *UserHandler) GetFollowing(c *gin.Context) {
 	response.Success(c, "Thành công", users)
 }
 
+// GetFollowers
 func (h *UserHandler) GetFollowers(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	users, err := h.userUsecase.GetFollowers(c.Request.Context(), userID, 20, 0)
@@ -157,7 +158,7 @@ func (h *UserHandler) GetFollowers(c *gin.Context) {
 	response.Success(c, "Thành công", users)
 }
 
-// 9. Suggestions
+// Suggestions
 func (h *UserHandler) GetSuggestions(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	suggestions, err := h.userUsecase.GetFriendSuggestions(c.Request.Context(), userID)
@@ -168,7 +169,7 @@ func (h *UserHandler) GetSuggestions(c *gin.Context) {
 	response.Success(c, "Thành công", suggestions)
 }
 
-// 10. Online Contacts
+// Online Contacts
 func (h *UserHandler) GetOnlineFriends(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	onlineContacts, err := h.userUsecase.GetOnlineContacts(c.Request.Context(), userID)

@@ -11,6 +11,7 @@ type Follow struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// FollowRepository
 type FollowRepository interface {
 	Follow(ctx context.Context, followerID, followingID int64) error
 	Unfollow(ctx context.Context, followerID, followingID int64) error
@@ -20,6 +21,7 @@ type FollowRepository interface {
 	CountFollowing(ctx context.Context, userID int64) (int64, error)
 }
 
+// FollowUsecase
 type FollowUsecase interface {
 	FollowUser(ctx context.Context, followerID, followingID int64) error
 	UnfollowUser(ctx context.Context, followerID, followingID int64) error

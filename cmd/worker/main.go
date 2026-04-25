@@ -22,7 +22,7 @@ import (
 func main() {
 	fmt.Println("🚀 Khởi động Kafka Interaction Worker...")
 
-	// 1. CẤU HÌNH & KẾT NỐI HẠ TẦNG
+	// CẤU HÌNH
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("❌ Lỗi load config: %v", err)
@@ -37,14 +37,12 @@ func main() {
 		Addr: "localhost:6379",
 	})
 
-	// 2. KHỞI TẠO CÁC TẦNG LOGIC
 	hub := ws.NewHub(redisClient)
 
 	notiRepo := postgres.NewNotificationRepository(database)
 	notiUC := usecase.NewNotificationUsecase(notiRepo, hub)
 	interactionRepo := postgres.NewInteractionRepository(database)
 
-	// 3. THIẾT LẬP KAFKA READER
 	reader := segmentio.NewReader(segmentio.ReaderConfig{
 		Brokers:  []string{cfg.KafkaBroker},
 		Topic:    "user_interactions",
@@ -55,7 +53,6 @@ func main() {
 
 	fmt.Println("🎧 Worker đang chầu chực nghe ngóng Kafka...")
 
-	// 4. LUỒNG XỬ LÝ CHÍNH
 	go func() {
 		for {
 			ctx := context.Background()
@@ -74,7 +71,6 @@ func main() {
 
 			fmt.Printf("\n🔥 [KAFKA] Đang xử lý: User %d -> %s -> Post %d\n", event.UserID, event.Action, event.PostID)
 
-			// --- A. THỰC THI LOGIC DATABASE ---
 			dbErr := error(nil)
 			if event.Action == "LIKE" {
 				dbErr = interactionRepo.LikePost(ctx, event.UserID, event.PostID)
@@ -88,7 +84,6 @@ func main() {
 				continue
 			}
 
-			// --- B. XỬ LÝ THÔNG BÁO REAL-TIME (Chỉ khi LIKE) ---
 			if event.Action == "LIKE" {
 				ownerID := interactionRepo.GetPostOwner(ctx, event.PostID)
 

@@ -65,6 +65,7 @@ func (r *interactionRepository) CreateComment(ctx context.Context, comment *doma
 	})
 }
 
+// UpdateComment
 func (r *interactionRepository) UpdateComment(ctx context.Context, commentID int64, currentUserID int64, newContent string) error {
 	result := r.db.WithContext(ctx).Model(&domain.Comment{}).
 		Where("id = ? AND user_id = ?", commentID, currentUserID).
@@ -82,6 +83,7 @@ func (r *interactionRepository) UpdateComment(ctx context.Context, commentID int
 	return nil
 }
 
+// DeleteComment
 func (r *interactionRepository) DeleteComment(ctx context.Context, commentID int64, currentUserID int64) error {
 	result := r.db.WithContext(ctx).
 		Where("id = ? AND user_id = ?", commentID, currentUserID).
@@ -107,6 +109,7 @@ func (r *interactionRepository) GetCommentsByPostID(ctx context.Context, postID 
 	return comments, err
 }
 
+// GetPostOwner
 func (r *interactionRepository) GetPostOwner(ctx context.Context, postID int64) int64 {
 	var userID int64
 	r.db.WithContext(ctx).Table("posts").Select("user_id").Where("id = ?", postID).Scan(&userID)

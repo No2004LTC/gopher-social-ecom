@@ -22,6 +22,7 @@ type Post struct {
 	IsSaved       bool  `json:"is_saved" gorm:"->"`
 }
 
+// PostRepository
 type PostRepository interface {
 	Create(ctx context.Context, post *Post) error
 	DeletePost(ctx context.Context, postID int64, currentUserID int64) error
@@ -30,6 +31,7 @@ type PostRepository interface {
 	CountPosts(ctx context.Context, userID int64) (int64, error)
 }
 
+// PostUsecase
 type PostUsecase interface {
 	CreatePost(ctx context.Context, post *Post, file *multipart.FileHeader) error
 	DeletePost(ctx context.Context, postID int64, currentUserID int64) error

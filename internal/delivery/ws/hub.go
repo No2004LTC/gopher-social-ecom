@@ -28,7 +28,7 @@ func NewHub(rdb *redis.Client) *Hub {
 	}
 }
 
-// 📡 SendToUser: Dùng cho Chat 1-1 (Bắn qua Redis)
+// SendToUser
 func (h *Hub) SendToUser(userID int64, payload []byte) {
 	ctx := context.Background()
 	envelope := map[string]interface{}{
@@ -39,7 +39,7 @@ func (h *Hub) SendToUser(userID int64, payload []byte) {
 	h.Redis.Publish(ctx, "system:ws_messages", data)
 }
 
-// 🔔 BroadcastNotification: Dùng cho Like/Follow (Bắn qua Redis)
+// 🔔 BroadcastNotification
 func (h *Hub) BroadcastNotification(noti domain.Notification) {
 	ctx := context.Background()
 	payload, _ := json.Marshal(noti)
@@ -103,7 +103,7 @@ func (h *Hub) Run() {
 }
 
 // --- HELPER FUNCTIONS ---
-
+// sendLocal
 func (h *Hub) sendLocal(userID int64, eventType string, data interface{}) {
 	if val, ok := h.Clients.Load(userID); ok {
 		client := val.(*Client)
@@ -120,6 +120,7 @@ func (h *Hub) sendLocal(userID int64, eventType string, data interface{}) {
 	}
 }
 
+// sendRawLocal
 func (h *Hub) sendRawLocal(userID int64, payload []byte) {
 	if val, ok := h.Clients.Load(userID); ok {
 		client := val.(*Client)
@@ -132,6 +133,7 @@ func (h *Hub) sendRawLocal(userID int64, payload []byte) {
 	}
 }
 
+// updateOnlineStatus
 func (h *Hub) updateOnlineStatus(userID int64, isOnline bool) {
 	if h.Redis == nil {
 		return

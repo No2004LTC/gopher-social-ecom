@@ -55,6 +55,7 @@ func (r *postRepository) UpdatePost(ctx context.Context, postID int64, currentUs
 	return nil
 }
 
+// GET POSTS
 func (r *postRepository) GetPosts(ctx context.Context, currentUserID int64, targetUserID int64, limit, offset int) ([]domain.Post, error) {
 	posts := make([]domain.Post, 0)
 
@@ -82,6 +83,7 @@ func (r *postRepository) GetPosts(ctx context.Context, currentUserID int64, targ
 	return posts, err
 }
 
+// CountPosts
 func (r *postRepository) CountPosts(ctx context.Context, userID int64) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&domain.Post{}).

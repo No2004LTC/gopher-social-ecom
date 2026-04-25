@@ -26,14 +26,13 @@ func NewInteractionMQ(brokerURL string) domain.MessageQueue {
 	return &interactionMQ{writer: w}
 }
 
+// PublishInteractionEvent
 func (m *interactionMQ) PublishInteractionEvent(ctx context.Context, event *domain.InteractionEvent) error {
-	// 1. Gói data thành JSON
 	body, err := json.Marshal(event)
 	if err != nil {
 		return err
 	}
 
-	// 2. Bắn lên Kafka
 	err = m.writer.WriteMessages(ctx,
 		segmentio.Message{
 			Key:   []byte(fmt.Sprintf("%d", event.UserID)),

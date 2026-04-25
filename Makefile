@@ -4,13 +4,13 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-# entry points cho API và Migration
+# entry points
 API_ENTRY = cmd/api/main.go
 WORKER_ENTRY = cmd/worker/main.go
 MIGRATE_ENTRY = cmd/migrate/main.go
 MIGRATION_DIR = migrations/sql
 
-# Biến cho Kubernetes
+# Kubernetes
 export SERVICE_NAME := gopher-be
 export IMAGE_NAME   := your-docker-username/gopher-be
 export IMAGE_TAG    := latest
@@ -100,4 +100,4 @@ k8s-down: ## Xóa bỏ môi trường K8s
 
 test-env:
 	@echo "Service name là: $$SERVICE_NAME"
-	envsubst < k8s/main.yaml | grep "name:" 
+	envsubst < k8s/main.yaml | grep "name:"

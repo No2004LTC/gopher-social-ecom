@@ -17,7 +17,7 @@ func NewPostHandler(postUC domain.PostUsecase) *PostHandler {
 	return &PostHandler{postUC: postUC}
 }
 
-// 1. TẠO BÀI VIẾT
+// Create Post
 func (h *PostHandler) Create(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	content := c.PostForm("content")
@@ -35,7 +35,7 @@ func (h *PostHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, post)
 }
 
-// 2. SỬA BÀI VIẾT
+// UpdatePost
 func (h *PostHandler) UpdatePost(c *gin.Context) {
 	postID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	userID := c.MustGet("user_id").(int64)
@@ -55,7 +55,7 @@ func (h *PostHandler) UpdatePost(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật thành công"})
 }
 
-// 3. XÓA BÀI VIẾT
+// DeletePost
 func (h *PostHandler) DeletePost(c *gin.Context) {
 	postID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	userID := c.MustGet("user_id").(int64)
@@ -67,7 +67,7 @@ func (h *PostHandler) DeletePost(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa bài viết"})
 }
 
-// 4. LẤY BẢNG TIN CHUNG (GLOBAL FEED)
+// GetGlobalFeed
 func (h *PostHandler) GetGlobalFeed(c *gin.Context) {
 	currentUserID := c.MustGet("user_id").(int64)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -82,7 +82,7 @@ func (h *PostHandler) GetGlobalFeed(c *gin.Context) {
 	h.sendPostResponse(c, posts)
 }
 
-// 5. LẤY BÀI VIẾT CỦA USER CỤ THỂ (PROFILE)
+// GetUserPosts
 func (h *PostHandler) GetUserPosts(c *gin.Context) {
 	currentUserID := c.MustGet("user_id").(int64)
 	targetUserID, _ := strconv.ParseInt(c.Param("user_id"), 10, 64)
@@ -98,7 +98,7 @@ func (h *PostHandler) GetUserPosts(c *gin.Context) {
 	h.sendPostResponse(c, posts)
 }
 
-// Helper function để mapping từ Domain sang DTO cho đỡ viết lặp code
+// sendPostResponse
 func (h *PostHandler) sendPostResponse(c *gin.Context, posts []domain.Post) {
 	response := make([]dto.PostResponse, 0)
 	for _, p := range posts {

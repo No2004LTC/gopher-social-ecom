@@ -16,10 +16,12 @@ func NewChatRepository(db *gorm.DB) domain.ChatRepository {
 	return &chatRepository{db: db}
 }
 
+// SaveMessage
 func (r *chatRepository) SaveMessage(ctx context.Context, msg *domain.Message) error {
 	return r.db.WithContext(ctx).Create(msg).Error
 }
 
+// GetHistory
 func (r *chatRepository) GetHistory(ctx context.Context, user1, user2 int64, limit int) ([]domain.Message, error) {
 	var msgs []domain.Message
 	err := r.db.WithContext(ctx).
@@ -30,6 +32,7 @@ func (r *chatRepository) GetHistory(ctx context.Context, user1, user2 int64, lim
 	return msgs, err
 }
 
+// GetUnreadCount
 func (r *chatRepository) GetUnreadCount(ctx context.Context, userID int64) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&domain.Message{}).
@@ -38,6 +41,7 @@ func (r *chatRepository) GetUnreadCount(ctx context.Context, userID int64) (int,
 	return int(count), err
 }
 
+// GetConversations
 func (r *chatRepository) GetConversations(ctx context.Context, userID int64) ([]dto.Conversation, error) {
 	var conversations []dto.Conversation
 
@@ -82,6 +86,7 @@ func (r *chatRepository) GetConversations(ctx context.Context, userID int64) ([]
 	return conversations, err
 }
 
+// MarkMessagesAsRead
 func (r *chatRepository) MarkMessagesAsRead(ctx context.Context, myUserID, partnerID int64) error {
 	result := r.db.WithContext(ctx).
 		Model(&domain.Message{}).

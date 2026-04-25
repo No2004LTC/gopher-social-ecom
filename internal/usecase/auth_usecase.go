@@ -30,6 +30,7 @@ func NewAuthUsecase(repo domain.AuthRepository, cfg *config.Config, rdb *redis.C
 	}
 }
 
+// Register
 func (u *authUsecase) Register(ctx context.Context, username, email, password string) error {
 	existingUser, _ := u.authRepo.GetByEmail(ctx, email)
 	if existingUser != nil {
@@ -45,6 +46,7 @@ func (u *authUsecase) Register(ctx context.Context, username, email, password st
 	return u.authRepo.Create(ctx, newUser)
 }
 
+// Login
 func (u *authUsecase) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
 	user, err := u.authRepo.GetByEmail(ctx, email)
 	if err != nil || user == nil {
@@ -61,6 +63,7 @@ func (u *authUsecase) Login(ctx context.Context, email, password string) (string
 	return token, user, nil
 }
 
+// SendPasswordOTP
 func (u *authUsecase) SendPasswordOTP(ctx context.Context, email string) error {
 	user, _ := u.authRepo.GetByEmail(ctx, email)
 	if user == nil {
@@ -74,6 +77,7 @@ func (u *authUsecase) SendPasswordOTP(ctx context.Context, email string) error {
 	return nil
 }
 
+// ChangePasswordWithOTP
 func (u *authUsecase) ChangePasswordWithOTP(ctx context.Context, email, otp, newPass string) error {
 	storedOTP, _ := u.redisClient.Get(ctx, "otp:"+email).Result()
 	if storedOTP != otp {

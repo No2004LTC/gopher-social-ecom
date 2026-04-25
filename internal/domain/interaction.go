@@ -31,13 +31,14 @@ type MessageQueue interface {
 	PublishInteractionEvent(ctx context.Context, event *InteractionEvent) error
 }
 
+// InteractionRepository
 type InteractionRepository interface {
-	// Like logic
+	// Like
 	LikePost(ctx context.Context, userID, postID int64) error
 	UnlikePost(ctx context.Context, userID, postID int64) error
 	IsLiked(ctx context.Context, userID, postID int64) (bool, error)
 
-	// Comment logic
+	// Comment
 	CreateComment(ctx context.Context, comment *Comment) error
 	UpdateComment(ctx context.Context, commentID int64, currentUserID int64, newContent string) error
 	DeleteComment(ctx context.Context, commentID int64, currentUserID int64) error
@@ -45,8 +46,12 @@ type InteractionRepository interface {
 	GetPostOwner(ctx context.Context, postID int64) int64 //
 }
 
+// InteractionUsecase
 type InteractionUsecase interface {
+	// Like
 	ToggleLike(ctx context.Context, userID, postID int64) (bool, error)
+
+	// Comment
 	CommentPost(ctx context.Context, userID, postID int64, content string) (*Comment, error)
 	UpdateComment(ctx context.Context, commentID int64, currentUserID int64, newContent string) error
 	DeleteComment(ctx context.Context, commentID int64, currentUserID int64) error

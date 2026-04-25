@@ -23,6 +23,7 @@ func NewInteractionUsecase(repo domain.InteractionRepository, notiUC domain.Noti
 	}
 }
 
+// ToggleLike
 func (u *interactionUsecase) ToggleLike(ctx context.Context, userID, postID int64) (bool, error) {
 	isLiked, err := u.repo.IsLiked(ctx, userID, postID)
 	if err != nil {
@@ -47,7 +48,6 @@ func (u *interactionUsecase) ToggleLike(ctx context.Context, userID, postID int6
 			return !isLiked, err // Có lỗi khi đẩy queue
 		}
 	} else {
-		// Fallback: Lỡ MQ sập thì vẫn ghi thẳng xuống DB như cũ
 		if isLiked {
 			err = u.repo.UnlikePost(ctx, userID, postID)
 		} else {
@@ -58,6 +58,7 @@ func (u *interactionUsecase) ToggleLike(ctx context.Context, userID, postID int6
 	return !isLiked, nil
 }
 
+// CommentPost
 func (u *interactionUsecase) CommentPost(ctx context.Context, userID, postID int64, content string) (*domain.Comment, error) {
 	comment := &domain.Comment{
 		UserID:  userID,
@@ -86,10 +87,12 @@ func (u *interactionUsecase) CommentPost(ctx context.Context, userID, postID int
 	return comment, nil
 }
 
+// DeleteComment
 func (u *interactionUsecase) DeleteComment(ctx context.Context, commentID int64, currentUserID int64) error {
 	return u.repo.DeleteComment(ctx, commentID, currentUserID)
 }
 
+// UpdateComment
 func (u *interactionUsecase) UpdateComment(ctx context.Context, commentID int64, currentUserID int64, newContent string) error {
 	if strings.TrimSpace(newContent) == "" {
 		return errors.New("nội dung bình luận không được để trống")
@@ -97,6 +100,7 @@ func (u *interactionUsecase) UpdateComment(ctx context.Context, commentID int64,
 	return u.repo.UpdateComment(ctx, commentID, currentUserID, newContent)
 }
 
+// GetPostComments
 func (u *interactionUsecase) GetPostComments(ctx context.Context, postID int64) ([]domain.Comment, error) {
 	return u.repo.GetCommentsByPostID(ctx, postID)
 }

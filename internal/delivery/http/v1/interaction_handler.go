@@ -16,6 +16,7 @@ func NewInteractionHandler(interUC domain.InteractionUsecase) *InteractionHandle
 	return &InteractionHandler{interUC: interUC}
 }
 
+// ToggleLike
 func (h *InteractionHandler) ToggleLike(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	postID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -33,6 +34,7 @@ func (h *InteractionHandler) ToggleLike(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": msg, "liked": isLiked})
 }
 
+// AddComment
 func (h *InteractionHandler) AddComment(c *gin.Context) {
 	userID := c.MustGet("user_id").(int64)
 	postID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -54,6 +56,7 @@ func (h *InteractionHandler) AddComment(c *gin.Context) {
 	c.JSON(http.StatusCreated, comment)
 }
 
+// UpdateComment
 func (h *InteractionHandler) UpdateComment(c *gin.Context) {
 	commentID, err := strconv.ParseInt(c.Param("comment_id"), 10, 64)
 	if err != nil {
@@ -84,7 +87,7 @@ func (h *InteractionHandler) UpdateComment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật bình luận"})
 }
 
-// HANDLER: XÓA BÌNH LUẬN
+// DeleteComment
 func (h *InteractionHandler) DeleteComment(c *gin.Context) {
 	commentID, err := strconv.ParseInt(c.Param("comment_id"), 10, 64)
 	if err != nil {
@@ -103,6 +106,7 @@ func (h *InteractionHandler) DeleteComment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Xóa bình luận thành công"})
 }
 
+// GetComments
 func (h *InteractionHandler) GetComments(c *gin.Context) {
 	postID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 

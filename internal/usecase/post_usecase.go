@@ -48,6 +48,7 @@ func (u *postUsecase) UpdatePost(ctx context.Context, postID int64, currentUserI
 	return u.postRepo.UpdatePost(ctx, postID, currentUserID, newContent)
 }
 
+// GET POSTS
 func (u *postUsecase) GetPosts(ctx context.Context, currentUserID int64, targetUserID int64, page, limit int) ([]domain.Post, error) {
 	// Tránh trường hợp limit quá ảo
 	if limit <= 0 {

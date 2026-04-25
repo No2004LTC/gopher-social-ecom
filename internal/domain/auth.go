@@ -2,7 +2,7 @@ package domain
 
 import "context"
 
-// AuthUsecase: Logic nghiệp vụ cho đăng nhập/đăng ký
+// AuthUsecase
 type AuthUsecase interface {
 	Register(ctx context.Context, username, email, password string) error
 	Login(ctx context.Context, email, password string) (string, *User, error)
@@ -10,7 +10,7 @@ type AuthUsecase interface {
 	ChangePasswordWithOTP(ctx context.Context, email, otp, newPassword string) error
 }
 
-// AuthRepository: Truy vấn liên quan đến tài khoản
+// AuthRepository
 type AuthRepository interface {
 	Create(ctx context.Context, user *User) error
 	GetByEmail(ctx context.Context, email string) (*User, error)

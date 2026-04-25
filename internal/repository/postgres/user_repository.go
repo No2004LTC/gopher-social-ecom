@@ -18,6 +18,7 @@ func NewUserRepository(db *gorm.DB) domain.UserRepository {
 	return &userRepository{db: db}
 }
 
+// GetByID
 func (r *userRepository) GetByID(ctx context.Context, id int64) (*domain.User, error) {
 	var user domain.User
 	result := r.db.WithContext(ctx).First(&user, id)
@@ -30,6 +31,7 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*domain.User, e
 	return &user, nil
 }
 
+// GetUserProfileByUsername
 func (r *userRepository) GetUserProfileByUsername(ctx context.Context, currentUserID int64, username string) (*domain.User, error) {
 	var user domain.User
 	query := `*, EXISTS (SELECT 1 FROM follows WHERE follower_id = ? AND following_id = users.id) as is_following`
@@ -49,6 +51,7 @@ func (r *userRepository) GetUserProfileByUsername(ctx context.Context, currentUs
 	return &user, nil
 }
 
+// UpdateAvatar
 func (r *userRepository) UpdateAvatar(ctx context.Context, userID int64, avatarURL string) error {
 	result := r.db.WithContext(ctx).Model(&domain.User{ID: userID}).Update("avatar_url", avatarURL)
 	if result.Error != nil {
@@ -60,6 +63,7 @@ func (r *userRepository) UpdateAvatar(ctx context.Context, userID int64, avatarU
 	return nil
 }
 
+// UpdateCover
 func (r *userRepository) UpdateCover(ctx context.Context, userID int64, coverURL string) error {
 	result := r.db.WithContext(ctx).Model(&domain.User{ID: userID}).Update("cover_url", coverURL)
 	if result.Error != nil {
@@ -71,6 +75,7 @@ func (r *userRepository) UpdateCover(ctx context.Context, userID int64, coverURL
 	return nil
 }
 
+// UpdateProfile
 func (r *userRepository) UpdateProfile(ctx context.Context, userID int64, updates map[string]interface{}) error {
 	updates["updated_at"] = time.Now()
 	result := r.db.WithContext(ctx).Table("users").Where("id = ?", userID).Updates(updates)
@@ -83,6 +88,7 @@ func (r *userRepository) UpdateProfile(ctx context.Context, userID int64, update
 	return nil
 }
 
+// SearchUsers
 func (r *userRepository) SearchUsers(ctx context.Context, currentUserID int64, query string, limit, offset int) ([]dto.UserCompact, error) {
 	var users []dto.UserCompact
 	selectQuery := `
@@ -97,6 +103,7 @@ func (r *userRepository) SearchUsers(ctx context.Context, currentUserID int64, q
 	return users, err
 }
 
+// GetFollowing
 func (r *userRepository) GetFollowing(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error) {
 	var users []dto.UserCompact
 	err := r.db.WithContext(ctx).Table("users").
@@ -107,6 +114,7 @@ func (r *userRepository) GetFollowing(ctx context.Context, currentUserID int64, 
 	return users, err
 }
 
+// GetFollowers
 func (r *userRepository) GetFollowers(ctx context.Context, currentUserID int64, limit, offset int) ([]dto.UserCompact, error) {
 	var users []dto.UserCompact
 	err := r.db.WithContext(ctx).Table("users").
@@ -117,6 +125,7 @@ func (r *userRepository) GetFollowers(ctx context.Context, currentUserID int64, 
 	return users, err
 }
 
+// GetSuggestedUsers
 func (r *userRepository) GetSuggestedUsers(ctx context.Context, myUserID int64, limit int) ([]domain.SuggestedUser, error) {
 	var suggestions []domain.SuggestedUser
 	query := `

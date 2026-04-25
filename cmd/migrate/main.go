@@ -69,7 +69,6 @@ func main() {
 			log.Fatalf("❌ Lỗi DROP: %v", err)
 		}
 	case "force":
-		// Lệnh: go run cmd/migrate/main.go force <version>
 		if len(args) < 3 {
 			log.Fatalf("❌ Lệnh force yêu cầu version (VD: go run main.go force 202403092230)")
 		}

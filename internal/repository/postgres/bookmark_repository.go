@@ -3,10 +3,8 @@ package postgres
 import (
 	"context"
 
-	"gorm.io/gorm"
-
-	// Thay project_gopher bằng tên module trong go.mod của cậu
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
+	"gorm.io/gorm"
 )
 
 type bookmarkRepository struct {
@@ -17,7 +15,7 @@ func NewBookmarkRepository(db *gorm.DB) domain.BookmarkRepository {
 	return &bookmarkRepository{db: db}
 }
 
-// Logic Toggle
+// ToggleSavePost
 func (r *bookmarkRepository) ToggleSavePost(ctx context.Context, userID int64, postID int64) (bool, error) {
 	var count int64
 
@@ -52,7 +50,7 @@ func (r *bookmarkRepository) ToggleSavePost(ctx context.Context, userID int64, p
 	return false, nil
 }
 
-// Lấy danh sách các bài viết đã lưu (Join bảng)
+// GetSavedPosts
 func (r *bookmarkRepository) GetSavedPosts(ctx context.Context, userID int64, limit, offset int) ([]domain.Post, error) {
 	var posts []domain.Post
 

@@ -31,6 +31,7 @@ func NewGmailSender(cfg *config.Config) EmailSender {
 	}
 }
 
+// SendEmail
 func (sender *gmailSender) SendEmail(to string, subject string, content string) error {
 	msg := []byte(fmt.Sprintf("To: %s\r\n"+
 		"Subject: %s\r\n"+

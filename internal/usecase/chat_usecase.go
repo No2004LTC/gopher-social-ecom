@@ -21,18 +21,22 @@ func NewChatUsecase(chatRepo domain.ChatRepository, userRepo domain.UserReposito
 	}
 }
 
+// SaveMessage
 func (uc *chatUsecase) SaveMessage(ctx context.Context, msg *domain.Message) error {
 	return uc.chatRepo.SaveMessage(ctx, msg)
 }
 
+// GetChatHistory
 func (uc *chatUsecase) GetChatHistory(ctx context.Context, user1, user2 int64, limit int) ([]domain.Message, error) {
 	return uc.chatRepo.GetHistory(ctx, user1, user2, limit)
 }
 
+// GetUnreadCount
 func (uc *chatUsecase) GetUnreadCount(ctx context.Context, userID int64) (int, error) {
 	return uc.chatRepo.GetUnreadCount(ctx, userID)
 }
 
+// GetCategorizedConversations
 func (uc *chatUsecase) GetCategorizedConversations(ctx context.Context, userID int64) (map[string][]dto.Conversation, error) {
 	allConvos, err := uc.chatRepo.GetConversations(ctx, userID)
 	if err != nil {
@@ -83,6 +87,7 @@ func (uc *chatUsecase) GetCategorizedConversations(ctx context.Context, userID i
 	}, nil
 }
 
+// MarkMessagesAsRead
 func (uc *chatUsecase) MarkMessagesAsRead(ctx context.Context, myUserID, partnerID int64) error {
 	return uc.chatRepo.MarkMessagesAsRead(ctx, myUserID, partnerID)
 }

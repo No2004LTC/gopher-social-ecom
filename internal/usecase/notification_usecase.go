@@ -20,6 +20,7 @@ func NewNotificationUsecase(repo domain.NotificationRepository, hub *ws.Hub) dom
 	}
 }
 
+// SendNotification
 func (u *notificationUsecase) SendNotification(ctx context.Context, noti *domain.Notification) error {
 	err := u.repo.Create(ctx, noti)
 	if err != nil {
@@ -30,17 +31,20 @@ func (u *notificationUsecase) SendNotification(ctx context.Context, noti *domain
 	return nil
 }
 
+// GetNotifications
 func (u *notificationUsecase) GetNotifications(ctx context.Context, userID int64, page int) ([]domain.Notification, error) {
 	limit := 20
 	offset := (page - 1) * limit
 	return u.repo.GetByUserID(ctx, userID, limit, offset)
 }
 
+// MarkAsRead
 func (u *notificationUsecase) MarkAsRead(ctx context.Context, notiID int64) error {
 
 	return u.repo.MarkAsRead(ctx, notiID)
 }
 
+// GetUserNotifications
 func (u *notificationUsecase) GetUserNotifications(ctx context.Context, userID int64, limit, offset int) ([]dto.NotificationResponse, error) {
 	return u.repo.GetUserNotifications(ctx, userID, limit, offset)
 }
@@ -50,6 +54,7 @@ func (uc *notificationUsecase) GetUnreadCount(ctx context.Context, userID int64)
 	return uc.repo.GetUnreadCount(ctx, userID)
 }
 
+// MarkAllAsRead
 func (uc *notificationUsecase) MarkAllAsRead(ctx context.Context, userID int64) error {
 	return uc.repo.MarkAllAsRead(ctx, userID)
 }

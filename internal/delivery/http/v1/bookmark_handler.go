@@ -12,12 +12,11 @@ type BookmarkHandler struct {
 	bookmarkUC domain.BookmarkUseCase
 }
 
-// Hàm khởi tạo Handler (Sẽ gọi trong main hoặc file route)
 func NewBookmarkHandler(buc domain.BookmarkUseCase) *BookmarkHandler {
 	return &BookmarkHandler{bookmarkUC: buc}
 }
 
-// API: Bật/Tắt lưu bài viết
+// ToggleSave
 func (h *BookmarkHandler) ToggleSave(c *gin.Context) {
 	// Lấy post_id từ URL (/posts/:id/save)
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -26,10 +25,8 @@ func (h *BookmarkHandler) ToggleSave(c *gin.Context) {
 		return
 	}
 
-	// Lấy user_id từ Middleware Auth
 	userID := c.GetInt64("user_id")
 
-	// Gọi Usecase
 	isSaved, err := h.bookmarkUC.ToggleSavePost(c.Request.Context(), userID, postID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi lưu bài viết"})
@@ -42,7 +39,7 @@ func (h *BookmarkHandler) ToggleSave(c *gin.Context) {
 	})
 }
 
-// API: Xem danh sách đã lưu
+// GetSavedFeed
 func (h *BookmarkHandler) GetSavedFeed(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
