@@ -17,7 +17,18 @@ type Comment struct {
 	PostID    int64     `json:"post_id"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
-	User      *User     `json:"user,omitempty"` // Để hiển thị ai đã comment
+	User      *User     `json:"user,omitempty"`
+}
+
+type InteractionEvent struct {
+	UserID    int64  `json:"user_id"`
+	PostID    int64  `json:"post_id"`
+	Action    string `json:"action"`
+	Timestamp string `json:"timestamp"`
+}
+
+type MessageQueue interface {
+	PublishInteractionEvent(ctx context.Context, event *InteractionEvent) error
 }
 
 type InteractionRepository interface {
@@ -35,7 +46,7 @@ type InteractionRepository interface {
 }
 
 type InteractionUsecase interface {
-	ToggleLike(ctx context.Context, userID, postID int64) (bool, error) // Trả về true nếu là Like, false nếu là Unlike
+	ToggleLike(ctx context.Context, userID, postID int64) (bool, error)
 	CommentPost(ctx context.Context, userID, postID int64, content string) (*Comment, error)
 	UpdateComment(ctx context.Context, commentID int64, currentUserID int64, newContent string) error
 	DeleteComment(ctx context.Context, commentID int64, currentUserID int64) error

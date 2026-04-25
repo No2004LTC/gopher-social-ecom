@@ -6,8 +6,9 @@ import (
 
 	"github.com/No2004LTC/gopher-social-ecom/config"
 	"github.com/No2004LTC/gopher-social-ecom/internal/delivery/http/middleware"
-	"github.com/No2004LTC/gopher-social-ecom/internal/delivery/http/v1"
+	v1 "github.com/No2004LTC/gopher-social-ecom/internal/delivery/http/v1"
 	"github.com/No2004LTC/gopher-social-ecom/internal/delivery/ws"
+	kafkaRepo "github.com/No2004LTC/gopher-social-ecom/internal/repository/kafka"
 	"github.com/No2004LTC/gopher-social-ecom/internal/repository/postgres"
 	"github.com/No2004LTC/gopher-social-ecom/internal/usecase"
 	"github.com/No2004LTC/gopher-social-ecom/pkg/db"
@@ -19,7 +20,9 @@ import (
 )
 
 func main() {
-	// 1. Load Config & Connect DB
+	// ==========================================
+	// 1. KHỞI TẠO HẠ TẦNG (INFRASTRUCTURE)
+	// ==========================================
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -30,58 +33,67 @@ func main() {
 		log.Fatal(err)
 	}
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
+	redisClient := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
 
-	// 2. --- KHỞI TẠO REPOSITORIES ---
-	authRepo := postgres.NewAuthRepository(database)
-	userRepo := postgres.NewUserRepository(database)
-	followRepo := postgres.NewFollowRepository(database)
-	postRepo := postgres.NewPostRepository(database)
-	chatRepo := postgres.NewChatRepository(database)
-	notiRepo := postgres.NewNotificationRepository(database)
-	interRepo := postgres.NewInteractionRepository(database)
-	bookmarkRepo := postgres.NewBookmarkRepository(database)
-
-	// 3. --- KHỞI TẠO INFRASTRUCTURE ---
 	emailSender := mail.NewGmailSender(cfg)
 	s3Client, err := storage.NewS3Client(cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, cfg.MinioUseSSL)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Hub cho WebSocket
 	hub := ws.NewHub(redisClient)
 	go hub.Run()
 
-	// 4. --- KHỞI TẠO USECASES (WIRING) ---
-	// Tách Auth và User rõ ràng
-	authUC := usecase.NewAuthUsecase(authRepo, cfg, redisClient, emailSender)
-	// UserUsecase nhận thêm FollowRepo và PostRepo để đếm số lượng Profile
-	userUC := usecase.NewUserUsecase(userRepo, followRepo, postRepo, redisClient)
+	// ==========================================
+	// 2. WIRING THEO TỪNG FEATURE (MODULE)
+	// ==========================================
 
-	chatUC := usecase.NewChatUsecase(chatRepo, userRepo)
+	// --- MODULE: NOTIFICATION  ---
+	notiRepo := postgres.NewNotificationRepository(database)
 	notiUC := usecase.NewNotificationUsecase(notiRepo, hub)
-	followUC := usecase.NewFollowUsecase(followRepo, notiUC)
-	postUC := usecase.NewPostUsecase(postRepo, s3Client, notiUC)
-	interUC := usecase.NewInteractionUsecase(interRepo, notiUC)
-	bookmarkUC := usecase.NewBookmarkUseCase(bookmarkRepo)
-
-	// 5. --- KHỞI TẠO HANDLERS ---
-	authHandler := v1.NewAuthHandler(authUC)
-	userHandler := v1.NewUserHandler(userUC, s3Client)
-	wsHandler := v1.NewWSHandler(hub, chatUC)
 	notiHandler := v1.NewNotificationHandler(notiUC)
+
+	// --- MODULE: AUTH ---
+	authRepo := postgres.NewAuthRepository(database)
+	authUC := usecase.NewAuthUsecase(authRepo, cfg, redisClient, emailSender)
+	authHandler := v1.NewAuthHandler(authUC)
+
+	// --- MODULE: FOLLOW ---
+	followRepo := postgres.NewFollowRepository(database)
+	followUC := usecase.NewFollowUsecase(followRepo, notiUC)
 	followHandler := v1.NewFollowHandler(followUC)
+
+	// --- MODULE: POST ---
+	postRepo := postgres.NewPostRepository(database)
+	postUC := usecase.NewPostUsecase(postRepo, s3Client, notiUC)
 	postHandler := v1.NewPostHandler(postUC)
+
+	// --- MODULE: USER ---
+	userRepo := postgres.NewUserRepository(database)
+	userUC := usecase.NewUserUsecase(userRepo, followRepo, postRepo, redisClient)
+	userHandler := v1.NewUserHandler(userUC, s3Client)
+
+	// --- MODULE: CHAT ---
+	chatRepo := postgres.NewChatRepository(database)
+	chatUC := usecase.NewChatUsecase(chatRepo, userRepo)
+	wsHandler := v1.NewWSHandler(hub, chatUC)
+
+	// --- MODULE: INTERACTION (MQ, Like, Comment) ---
+	interRepo := postgres.NewInteractionRepository(database)
+	interactionMQRepo := kafkaRepo.NewInteractionMQ(cfg.KafkaBroker)
+	interUC := usecase.NewInteractionUsecase(interRepo, notiUC, interactionMQRepo)
 	interHandler := v1.NewInteractionHandler(interUC)
+
+	// --- MODULE: BOOKMARK ---
+	bookmarkRepo := postgres.NewBookmarkRepository(database)
+	bookmarkUC := usecase.NewBookmarkUseCase(bookmarkRepo)
 	bookmarkHandler := v1.NewBookmarkHandler(bookmarkUC)
 
-	// 6. --- ROUTER SETUP ---
+	// ==========================================
+	// 3. THIẾT LẬP ROUTER & BẬT SERVER
+	// ==========================================
 	r := gin.Default()
 
-	// CORS
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173"},
 		AllowMethods:     []string{"POST", "GET", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -92,10 +104,10 @@ func main() {
 
 	v1Group := r.Group("/api/v1")
 	{
-		// WebSocket (Realtime)
+		// WebSocket
 		v1Group.GET("/ws", middleware.AuthMiddleware(cfg.JWTSecret), wsHandler.ServeWS)
 
-		// Auth Group (Public)
+		// Auth Group
 		auth := v1Group.Group("/auth")
 		{
 			auth.POST("/register", authHandler.Register)
@@ -104,7 +116,7 @@ func main() {
 			auth.POST("/reset-password", authHandler.ResetPassword)
 		}
 
-		// User Group (Private - Need Token)
+		// User Group
 		users := v1Group.Group("/users")
 		users.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 		{
@@ -113,14 +125,13 @@ func main() {
 			users.PATCH("/profile", userHandler.UpdateProfile)
 			users.POST("/avatar", userHandler.UploadAvatar)
 			users.POST("/cover", userHandler.UploadCover)
-			users.GET("/profile/:username", userHandler.GetUserProfile) // 🚀 ĐÃ FIX: Gọi sang userHandler
+			users.GET("/profile/:username", userHandler.GetUserProfile)
 			users.GET("/id/:id", userHandler.GetUserByID)
 			users.GET("/following", userHandler.GetFollowing)
 			users.GET("/followers", userHandler.GetFollowers)
 			users.GET("/suggestions", userHandler.GetSuggestions)
 			users.GET("/online-contacts", userHandler.GetOnlineFriends)
 
-			// Follow Actions
 			users.POST("/:id/follow", followHandler.Follow)
 			users.POST("/:id/unfollow", followHandler.Unfollow)
 		}
@@ -136,7 +147,7 @@ func main() {
 			chats.PUT("/:id/read", wsHandler.MarkAsRead)
 		}
 
-		// Post Group
+		// Post & Interaction Group
 		posts := v1Group.Group("/posts")
 		posts.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 		{
@@ -145,13 +156,15 @@ func main() {
 			posts.POST("", postHandler.Create)
 			posts.PUT("/:id", postHandler.UpdatePost)
 			posts.DELETE("/:id", postHandler.DeletePost)
+
 			posts.POST("/:id/like", interHandler.ToggleLike)
-			posts.POST("/:id/save", bookmarkHandler.ToggleSave)
 			posts.GET("/:id/comments", interHandler.GetComments)
 			posts.POST("/:id/comments", interHandler.AddComment)
+
+			posts.POST("/:id/save", bookmarkHandler.ToggleSave)
 		}
 
-		// Notifications
+		// Notifications Group
 		notifications := v1Group.Group("/notifications")
 		notifications.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 		{
@@ -161,7 +174,7 @@ func main() {
 			notifications.PUT("/:id/read", notiHandler.MarkAsRead)
 		}
 
-		// Bookmarks
+		// Bookmarks Group
 		v1Group.GET("/bookmarks", middleware.AuthMiddleware(cfg.JWTSecret), bookmarkHandler.GetSavedFeed)
 	}
 

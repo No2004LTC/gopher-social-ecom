@@ -11,13 +11,11 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Khởi tạo các lỗi có thể gặp phải để dùng nhiều lần
 var (
 	ErrInvalidHash         = errors.New("định dạng hash không hợp lệ")
 	ErrIncompatibleVersion = errors.New("phiên bản argon2 không tương thích")
 )
 
-// params struct chứa các thông số cấu hình cho thuật toán Argon2id
 type params struct {
 	memory      uint32
 	iterations  uint32
@@ -26,7 +24,6 @@ type params struct {
 	keyLength   uint32
 }
 
-// Thông số chuẩn theo khuyến nghị của OWASP, p là biến toàn cục giữ giá trị mặc định dùng cho cả HashPassword và ComparePassword để đảm bảo nhất quán
 var p = &params{
 	memory:      64 * 1024, // 64MB
 	iterations:  3,
@@ -35,7 +32,6 @@ var p = &params{
 	keyLength:   32,
 }
 
-// HashPassword tạo chuỗi hash Argon2id từ mật khẩu thuần
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, p.saltLength)
 	if _, err := rand.Read(salt); err != nil {
@@ -44,7 +40,6 @@ func HashPassword(password string) (string, error) {
 
 	hash := argon2.IDKey([]byte(password), salt, p.iterations, p.memory, p.parallelism, p.keyLength)
 
-	// Format: $argon2id$v=19$m=65536,t=3,p=2$salt$hash
 	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
 	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
 
@@ -54,9 +49,9 @@ func HashPassword(password string) (string, error) {
 	return encodedHash, nil
 }
 
-// ComparePassword so sánh mật khẩu nhập vào với chuỗi hash trong DB
+// ComparePassword
 func ComparePassword(password, encodedHash string) (bool, error) {
-	vals := strings.Split(encodedHash, "$") // tách chuỗi bằng strings.Spli
+	vals := strings.Split(encodedHash, "$")
 	if len(vals) != 6 {
 		return false, ErrInvalidHash
 	}
@@ -86,7 +81,6 @@ func ComparePassword(password, encodedHash string) (bool, error) {
 
 	comparisonHash := argon2.IDKey([]byte(password), salt, iterations, memory, parallelism, uint32(len(decodedHash)))
 
-	// Sử dụng ConstantTimeCompare để chống Timing Attacks
 	if subtle.ConstantTimeCompare(decodedHash, comparisonHash) == 1 {
 		return true, nil
 	}

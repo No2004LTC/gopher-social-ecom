@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 	"os"
-	"strconv" // Cần thêm để chuyển đổi version từ string sang int
+	"strconv"
 
 	"github.com/No2004LTC/gopher-social-ecom/config"
 	"github.com/No2004LTC/gopher-social-ecom/pkg/db"

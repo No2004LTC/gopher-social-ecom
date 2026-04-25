@@ -1,46 +1,42 @@
-# ConnectVN - GopherSocial-Commerce Backend
+# ConnectVN - GopherSocial Backend
 
-**ConnectVN** là một hệ thống Social Network kết hợp E-commerce được xây dựng bằng ngôn ngữ **Golang**, tập trung vào khả năng mở rộng, hiệu năng cao và trải nghiệm người dùng thời gian thực. Dự án tuân thủ nghiêm ngặt nguyên lý **Clean Architecture** để đảm bảo code dễ bảo trì và kiểm thử.
+ConnectVN là một hệ thống Social Network được xây dựng bằng ngôn ngữ Golang, tập trung vào khả năng mở rộng, hiệu năng cao và trải nghiệm người dùng thời gian thực. Dự án tuân thủ nghiêm ngặt nguyên lý Clean Architecture để đảm bảo code dễ bảo trì và kiểm thử.
+
+---
+
+## Tech Stack (Công nghệ sử dụng)
+
+- Ngôn ngữ: Golang (Go 1.21+)
+- Web Framework / Router: Gin HTTP Framework
+- Database (RDBMS): PostgreSQL
+- In-Memory Data / Cache: Redis (Xử lý OTP, Rate Limiting, quản lý trạng thái Online/Offline bằng Hash Map)
+- Message Broker: Apache Kafka (Xử lý hàng đợi bất đồng bộ cho các sự kiện tương tác và cơ chế Fan-out)
+- Object Storage: MinIO (S3 Compatible - Lưu trữ Avatar, Cover, Media)
+- Real-time Engine: Gorilla WebSocket kết hợp Redis Pub/Sub (Mô hình phân tán Server-to-Client)
+- Infrastructure: Docker & Docker Compose
 
 ---
 
 ## Tính năng nổi bật
 
-- **Authentication & Security**:
-    - Xác thực qua JWT.
-    - Hệ thống mã OTP gửi qua Gmail cho chức năng quên mật khẩu, lưu trữ trong **Redis** với cơ chế tự hủy (TTL).
-- **User Management**:
-    - Quản lý hồ sơ cá nhân (Bio, Avatar, Cover Image).
-    - Tích hợp **MinIO** (S3 compatible) để lưu trữ hình ảnh hiệu quả.
-- **Social Interactions**:
-    - Hệ thống Follow/Unfollow.
-    - Tương tác bài viết: Like, Comment (Lồng nhau).
-- **Real-time Engine**:
-    - Chat thời gian thực qua **WebSockets**.
-    - Theo dõi trạng thái Online/Offline của bạn bè thông qua **Redis Hash Map**.
-    - Thông báo (Notifications) tức thì.
-- **High-Performance Feed**:
-    - Tối ưu hóa truy vấn bảng tin (Newsfeed).
-    - Thiết kế sẵn kiến trúc **Push Model (Fan-out on Write)** sử dụng **Apache Kafka** để xử lý dữ liệu lớn.
+- Authentication & Security:
+  - Xác thực qua JWT.
+  - Hệ thống mã OTP gửi qua Gmail cho chức năng quên mật khẩu, lưu trữ trong Redis với cơ chế tự hủy (TTL).
 
----
+- User Management:
+  - Quản lý hồ sơ cá nhân (Bio, Avatar, Cover Image).
+  - Upload và lưu trữ hình ảnh hiệu suất cao qua MinIO.
 
-## Kiến trúc dự án (Clean Architecture)
+- Social Interactions:
+  - Hệ thống Follow/Unfollow.
+  - Tương tác bài viết: Like, Comment (Lồng nhau) - Xử lý bất đồng bộ qua Kafka để tối ưu API.
 
-Dự án được chia làm 4 lớp chính:
+- Real-time Engine:
+  - Chat 1-1 thời gian thực qua WebSockets.
+  - Theo dõi trạng thái Online/Offline của bạn bè theo thời gian thực.
+  - Thông báo (Notifications) tức thì đẩy trực tiếp về Client.
 
-1.  **Domain (Entities & Interfaces)**: Chứa các định nghĩa model và giao tiếp giữa các tầng.
-2.  **Usecase (Business Logic)**: Xử lý nghiệp vụ chính của hệ thống (Được phân tách thành `AuthUsecase` và `UserUsecase`).
-3.  **Repository (Data Access)**: Làm việc với Database (PostgreSQL) và Cache (Redis).
-4.  **Delivery (Handlers & Middlewares)**: Tiếp nhận các request từ HTTP/WebSocket.
+- High-Performance Feed:
+  - Tối ưu hóa truy vấn bảng tin (Newsfeed).
+  - Thiết kế sẵn kiến trúc Push Model (Fan-out on Write) sử dụng Apache Kafka để xử lý phân phối bài viết cho lượng dữ liệu lớn.
 
-```text
-internal/
-├── domain/             # Interfaces & Models
-├── usecase/            # Business Logic (Auth, User, Chat, Post...)
-├── repository/         # Data Access (Postgres, Redis)
-└── delivery/
-    ├── http/           # HTTP Handlers & Middlewares
-    └── ws/             # WebSocket Hub & Handler
-pkg/                    # Shared packages (Mail, Storage, Auth...)
-cmd/api/main.go         # Entry point

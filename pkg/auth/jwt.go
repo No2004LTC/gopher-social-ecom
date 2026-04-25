@@ -9,7 +9,7 @@ import (
 
 var ErrInvalidToken = errors.New("token không hợp lệ hoặc đã hết hạn")
 
-// GenerateToken tạo một JWT token mới
+// GenerateToken
 func GenerateToken(userID int64, secret string, expiry time.Duration) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": userID,
@@ -21,10 +21,9 @@ func GenerateToken(userID int64, secret string, expiry time.Duration) (string, e
 	return token.SignedString([]byte(secret))
 }
 
-// ValidateToken kiểm tra token có hợp lệ không và trả về userID
+// ValidateToken
 func ValidateToken(tokenString string, secret string) (int64, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Kiểm tra thuật toán ký
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
 		}
@@ -40,7 +39,6 @@ func ValidateToken(tokenString string, secret string) (int64, error) {
 		return 0, ErrInvalidToken
 	}
 
-	// Lấy userID từ claim "sub"
 	userID := int64(claims["sub"].(float64))
 	return userID, nil
 }

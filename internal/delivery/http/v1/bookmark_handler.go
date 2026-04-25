@@ -1,10 +1,11 @@
 package v1
 
 import (
-	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
+
+	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
+	"github.com/gin-gonic/gin"
 )
 
 type BookmarkHandler struct {
@@ -37,7 +38,7 @@ func (h *BookmarkHandler) ToggleSave(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Thành công",
-		"is_saved": isSaved, // FE sẽ dùng biến này để tô màu vàng cho nút Bookmark
+		"is_saved": isSaved,
 	})
 }
 

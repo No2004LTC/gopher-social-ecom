@@ -31,7 +31,6 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}:latest
 
       - name: Set up Kubeconfig
-        # Nếu cậu dùng Cloud (DigitalOcean/AWS), bước này để nạp quyền truy cập K8s
         uses: azure/k8s-set-context@v3
         with:
           method: kubeconfig

@@ -9,7 +9,7 @@ import (
 
 type followUsecase struct {
 	repo   domain.FollowRepository
-	notiUC domain.NotificationUsecase // Đổi từ hub sang cái này
+	notiUC domain.NotificationUsecase
 }
 
 func NewFollowUsecase(repo domain.FollowRepository, notiUC domain.NotificationUsecase) domain.FollowUsecase {
@@ -29,19 +29,16 @@ func (u *followUsecase) FollowUser(ctx context.Context, followerID, followingID 
 		return err
 	}
 
-	// Bắn thông báo qua NotificationUsecase (Vừa lưu DB vừa Real-time)
 	if u.notiUC != nil {
-		// Chúng ta dùng goroutine để việc gửi thông báo không làm chậm thao tác Follow
 		go func() {
 			noti := &domain.Notification{
 				UserID:   followingID,
 				ActorID:  followerID,
 				Type:     "FOLLOW",
-				EntityID: followerID,                 // ID của người thực hiện hành động
-				Message:  "đã bắt đầu theo dõi bạn.", // Nội dung hiển thị
+				EntityID: followerID,
+				Message:  "đã bắt đầu theo dõi bạn.",
 			}
 
-			// Sử dụng context.Background() vì goroutine có thể chạy lâu hơn request chính
 			_ = u.notiUC.SendNotification(context.Background(), noti)
 		}()
 	}

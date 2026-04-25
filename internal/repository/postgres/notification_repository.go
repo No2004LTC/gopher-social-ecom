@@ -37,10 +37,9 @@ func (r *notificationRepository) MarkAsRead(ctx context.Context, notiID int64) e
 }
 
 func (r *notificationRepository) GetUserNotifications(ctx context.Context, userID int64, limit, offset int) ([]dto.NotificationResponse, error) {
-	// 1. Lấy dữ liệu nguyên bản từ bảng Notifications
 	var notis []domain.Notification
 	err := r.db.WithContext(ctx).
-		Preload("Actor"). // "Phép thuật" của GORM: Tự động móc nối lấy data user nhét vào trường Actor
+		Preload("Actor").
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Limit(limit).Offset(offset).
@@ -50,13 +49,10 @@ func (r *notificationRepository) GetUserNotifications(ctx context.Context, userI
 		return nil, err
 	}
 
-	// 2. Chuyển đổi (Mapping) sang DTO
-	// Cách này đảm bảo 100% dữ liệu không bao giờ bị thất lạc
 	var responses []dto.NotificationResponse
 	for _, n := range notis {
 		var actorCompact dto.ActorCompact
 
-		// Tránh lỗi Nil Pointer (Panic) lỡ có noti nào không có người gửi
 		if n.Actor != nil {
 			actorCompact = dto.ActorCompact{
 				ID:        n.Actor.ID,
@@ -71,17 +67,15 @@ func (r *notificationRepository) GetUserNotifications(ctx context.Context, userI
 			Message:   n.Message,
 			IsRead:    n.IsRead,
 			CreatedAt: n.CreatedAt,
-			Actor:     actorCompact, // Nhét cục Actor đã chuẩn bị vào đây
+			Actor:     actorCompact,
 		})
 	}
 
 	return responses, nil
 }
 
-// GetUnreadCount lấy tổng số thông báo chưa đọc của 1 user
 func (r *notificationRepository) GetUnreadCount(ctx context.Context, userID int64) (int, error) {
 	var count int64
-	// Đếm số dòng có user_id = mình và is_read = false
 	err := r.db.WithContext(ctx).Model(&domain.Notification{}).
 		Where("user_id = ? AND is_read = false", userID).
 		Count(&count).Error
@@ -90,7 +84,6 @@ func (r *notificationRepository) GetUnreadCount(ctx context.Context, userID int6
 }
 
 func (r *notificationRepository) MarkAllAsRead(ctx context.Context, userID int64) error {
-	// Tìm tất cả thông báo CỦA MÌNH đang chưa đọc và update thành true
 	return r.db.WithContext(ctx).Model(&domain.Notification{}).
 		Where("user_id = ? AND is_read = false", userID).
 		Update("is_read", true).Error

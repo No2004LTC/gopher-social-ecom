@@ -1,9 +1,8 @@
 package ws
 
 import (
-	"context"
 	"log"
-	"strconv"
+	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,6 +15,10 @@ const (
 	maxMessageSize = 512
 )
 
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
 type Client struct {
 	Hub    *Hub
 	Conn   *websocket.Conn
@@ -23,47 +26,36 @@ type Client struct {
 	UserID int64
 }
 
-func (c *Client) ReadPump() {
+func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, userID int64) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("❌ Upgrade error: %v", err)
+		return
+	}
+	client := &Client{Hub: hub, Conn: conn, Send: make(chan []byte, 256), UserID: userID}
+	client.Hub.Register <- client
+
+	go client.writePump()
+	go client.readPump()
+}
+
+func (c *Client) readPump() {
 	defer func() {
-		// 1. Gửi tín hiệu hủy đăng ký cho Hub
 		c.Hub.Unregister <- c
-
-		// 2. 👉 REDIS: XỬ LÝ TRẠNG THÁI OFFLINE (GIẢM COUNT)
-		// Lưu ý: Cậu cần đảm bảo struct Hub đã được gắn thêm trường Redis (*redis.Client)
-		if c.Hub.Redis != nil {
-			ctx := context.Background()
-			userIDStr := strconv.FormatInt(c.UserID, 10)
-
-			// Giảm số lượng connection (tab) đi 1
-			newCount, err := c.Hub.Redis.HIncrBy(ctx, "system:online_users", userIDStr, -1).Result()
-			if err == nil && newCount <= 0 {
-				// Nếu count <= 0 nghĩa là user đã đóng tab cuối cùng -> Xóa hẳn khỏi map
-				c.Hub.Redis.HDel(ctx, "system:online_users", userIDStr)
-			}
-		}
-
-		// 3. Đóng ống nối
 		c.Conn.Close()
 	}()
-
 	c.Conn.SetReadLimit(maxMessageSize)
-	// Đặt thời gian timeout, nếu sau pongWait mà không thấy trình duyệt phản hồi -> Rớt mạng
 	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.Conn.SetPongHandler(func(string) error { c.Conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
-
 	for {
-		// Chỉ đọc để giữ kết nối, bỏ qua payload vì Frontend không gửi chat qua ống này nữa
 		_, _, err := c.Conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Lỗi kết nối WS: %v", err)
-			}
-			break // Thoát vòng lặp -> Chạy defer để ngắt kết nối và trừ count Redis
+			break
 		}
 	}
 }
 
-func (c *Client) WritePump() {
+func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -77,16 +69,10 @@ func (c *Client) WritePump() {
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			w, err := c.Conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				return
-			}
-			w.Write(message)
-			if err := w.Close(); err != nil {
+			if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
 		case <-ticker.C:
-			// Gửi gói tin Ping định kỳ để giữ kết nối không bị Proxy/Nginx ngắt
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return

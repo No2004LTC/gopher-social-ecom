@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -8,49 +10,117 @@ import (
 	"syscall"
 
 	"github.com/No2004LTC/gopher-social-ecom/config"
-	"github.com/No2004LTC/gopher-social-ecom/pkg/rabbitmq"
+	"github.com/No2004LTC/gopher-social-ecom/internal/delivery/ws"
+	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
+	"github.com/No2004LTC/gopher-social-ecom/internal/repository/postgres"
+	"github.com/No2004LTC/gopher-social-ecom/internal/usecase"
+	"github.com/No2004LTC/gopher-social-ecom/pkg/db"
+	"github.com/redis/go-redis/v9"
+	segmentio "github.com/segmentio/kafka-go"
 )
 
 func main() {
-	fmt.Println("🚀 Bắt đầu khởi động Background Worker...")
+	fmt.Println("🚀 Khởi động Kafka Interaction Worker...")
 
+	// 1. CẤU HÌNH & KẾT NỐI HẠ TẦNG
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("❌ Lỗi load config: %v", err)
 	}
 
-	// 1. Kết nối RabbitMQ
-	conn, ch := rabbitmq.ConnectRabbitMQ(cfg.RabbitMQUrl)
-	defer conn.Close()
-	defer ch.Close()
-
-	// 2. Đăng ký nhận tin nhắn từ Queue "user_interactions"
-	msgs, err := ch.Consume(
-		"user_interactions", // Tên Queue
-		"",                  // Consumer Name (để trống tự random)
-		true,                // Auto-Ack (Tự động báo là đã xử lý xong)
-		false,               // Exclusive
-		false,               // No-local
-		false,               // No-wait
-		nil,                 // Args
-	)
+	database, err := db.ConnectDB(cfg)
 	if err != nil {
-		log.Fatalf("❌ Lỗi đăng ký Consumer: %v", err)
+		log.Fatalf("❌ Lỗi kết nối Database: %v", err)
 	}
 
-	fmt.Println("🎧 Worker đang chầu chực nghe ngóng ở Queue 'user_interactions'...")
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
 
-	// 3. Vòng lặp chờ tin nhắn tới
+	// 2. KHỞI TẠO CÁC TẦNG LOGIC
+	hub := ws.NewHub(redisClient)
+
+	notiRepo := postgres.NewNotificationRepository(database)
+	notiUC := usecase.NewNotificationUsecase(notiRepo, hub)
+	interactionRepo := postgres.NewInteractionRepository(database)
+
+	// 3. THIẾT LẬP KAFKA READER
+	reader := segmentio.NewReader(segmentio.ReaderConfig{
+		Brokers:  []string{cfg.KafkaBroker},
+		Topic:    "user_interactions",
+		GroupID:  "interaction-worker-group",
+		MinBytes: 1,
+		MaxBytes: 1e6,
+	})
+
+	fmt.Println("🎧 Worker đang chầu chực nghe ngóng Kafka...")
+
+	// 4. LUỒNG XỬ LÝ CHÍNH
 	go func() {
-		for d := range msgs {
-			// KHI CÓ TIN NHẮN TỚI, NÓ SẼ CHẠY VÀO ĐÂY
-			fmt.Printf("🔥 [WORKER ĐÃ BẮT ĐƯỢC]: %s\n", d.Body)
-			// Tương lai cậu sẽ gọi hàm Update Database ở đây
+		for {
+			ctx := context.Background()
+			m, err := reader.FetchMessage(ctx)
+			if err != nil {
+				log.Printf("❌ Lỗi khi fetch tin nhắn Kafka: %v", err)
+				continue
+			}
+
+			var event domain.InteractionEvent
+			if err := json.Unmarshal(m.Value, &event); err != nil {
+				log.Printf("❌ Lỗi parse JSON: %v", err)
+				reader.CommitMessages(ctx, m)
+				continue
+			}
+
+			fmt.Printf("\n🔥 [KAFKA] Đang xử lý: User %d -> %s -> Post %d\n", event.UserID, event.Action, event.PostID)
+
+			// --- A. THỰC THI LOGIC DATABASE ---
+			dbErr := error(nil)
+			if event.Action == "LIKE" {
+				dbErr = interactionRepo.LikePost(ctx, event.UserID, event.PostID)
+			} else if event.Action == "UNLIKE" {
+				dbErr = interactionRepo.UnlikePost(ctx, event.UserID, event.PostID)
+			}
+
+			if dbErr != nil {
+				log.Printf("❌ Lỗi Database: %v", dbErr)
+				reader.CommitMessages(ctx, m)
+				continue
+			}
+
+			// --- B. XỬ LÝ THÔNG BÁO REAL-TIME (Chỉ khi LIKE) ---
+			if event.Action == "LIKE" {
+				ownerID := interactionRepo.GetPostOwner(ctx, event.PostID)
+
+				if event.UserID != ownerID {
+					noti := &domain.Notification{
+						UserID:   ownerID,
+						ActorID:  event.UserID,
+						Type:     "LIKE",
+						EntityID: event.PostID,
+						Message:  "đã thích bài viết của bạn.",
+					}
+
+					if err := notiUC.SendNotification(ctx, noti); err != nil {
+						log.Printf("⚠️ Lỗi bắn thông báo: %v", err)
+					} else {
+						fmt.Printf("🔔 Đã đẩy thông báo tới User %d\n", ownerID)
+					}
+				}
+			}
+
+			if err := reader.CommitMessages(ctx, m); err != nil {
+				log.Printf("❌ Lỗi Commit Kafka (Tin nhắn có thể bị lặp): %v", err)
+			} else {
+				fmt.Println("✅ Hoàn tất và Commit thành công.")
+			}
 		}
 	}()
 
+	// GRACEFUL SHUTDOWN
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	fmt.Println("\n🛑 Đang dọn dẹp và tắt Worker an toàn...")
+	fmt.Println("\n🛑 Đang dọn dẹp và tắt Worker...")
+	reader.Close()
 }

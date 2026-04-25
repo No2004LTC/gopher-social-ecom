@@ -15,7 +15,7 @@ import (
 )
 
 type authUsecase struct {
-	authRepo    domain.AuthRepository // Đã đổi sang AuthRepo
+	authRepo    domain.AuthRepository
 	cfg         *config.Config
 	redisClient *redis.Client
 	emailSender mail.EmailSender

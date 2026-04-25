@@ -2,7 +2,7 @@ package dto
 
 import "time"
 
-// Thông tin người thực hiện hành động (ví dụ: người đã follow bạn)
+// Thông tin người thực hiện hành động
 type ActorCompact struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -16,5 +16,5 @@ type NotificationResponse struct {
 	Message   string       `json:"message"`
 	IsRead    bool         `json:"is_read"`
 	CreatedAt time.Time    `json:"created_at"`
-	Actor     ActorCompact `json:"actor"` // Trả về object "actor" cho React dễ đọc
+	Actor     ActorCompact `json:"actor"`
 }

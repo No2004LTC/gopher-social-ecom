@@ -7,7 +7,7 @@ import (
 // Config chứa toàn bộ thông số cấu hình của ứng dụng
 // mapstructure giúp Viper ánh xạ tên key từ .env vào đúng trường trong struct
 type Config struct {
-	DBHost     string `mapstructure:"DB_HOST"` // Struct tags để Viper biết cách ánh xạ từ file .env vào struct
+	DBHost     string `mapstructure:"DB_HOST"`
 	DBPort     string `mapstructure:"DB_PORT"`
 	DBUser     string `mapstructure:"DB_USER"`
 	DBPassword string `mapstructure:"DB_PASSWORD"`
@@ -33,23 +33,22 @@ type Config struct {
 	//Hứng deploy
 	Env string `mapstructure:"ENV"`
 
-	// RABBITMQ
-	RabbitMQUrl string `mapstructure:"RABBITMQ_URL"`
+	// KafkaBroker
+	KafkaBroker string `mapstructure:"KAFKA_BROKER"`
 }
 
 // LoadConfig sẽ tìm file .env và nạp giá trị vào struct Config
 func LoadConfig() (*Config, error) {
 	config := &Config{}
-	viper.AddConfigPath(".")    // Tìm file cấu hình ở thư mục hiện tại (root)
-	viper.SetConfigFile(".env") // Tên file cụ thể là .env
-	viper.AutomaticEnv()        // Cho phép ghi đè bằng biến môi trường hệ thống
+	viper.AddConfigPath(".")
+	viper.SetConfigFile(".env")
+	viper.AutomaticEnv()
 
-	err := viper.ReadInConfig() // Bắt đầu đọc file
+	err := viper.ReadInConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	// Unmarshal chuyển đổi dữ liệu từ file vào struct
 	err = viper.Unmarshal(config)
 	if err != nil {
 		return nil, err

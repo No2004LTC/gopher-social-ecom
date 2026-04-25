@@ -17,11 +17,10 @@ func NewBookmarkRepository(db *gorm.DB) domain.BookmarkRepository {
 	return &bookmarkRepository{db: db}
 }
 
-// Logic Toggle: Có rồi thì xóa, chưa có thì thêm
+// Logic Toggle
 func (r *bookmarkRepository) ToggleSavePost(ctx context.Context, userID int64, postID int64) (bool, error) {
 	var count int64
 
-	// 1. Đếm xem đã lưu chưa (Dùng Count tuyệt đối không văng lỗi "record not found")
 	err := r.db.WithContext(ctx).
 		Model(&domain.Bookmark{}).
 		Where("user_id = ? AND post_id = ?", userID, postID).
@@ -32,7 +31,6 @@ func (r *bookmarkRepository) ToggleSavePost(ctx context.Context, userID int64, p
 	}
 
 	if count == 0 {
-		// 2. CHƯA LƯU -> Thực hiện tạo mới (INSERT)
 		newBookmark := domain.Bookmark{
 			UserID: userID,
 			PostID: postID,
@@ -40,10 +38,9 @@ func (r *bookmarkRepository) ToggleSavePost(ctx context.Context, userID int64, p
 		if errCreate := r.db.WithContext(ctx).Create(&newBookmark).Error; errCreate != nil {
 			return false, errCreate
 		}
-		return true, nil // is_saved = true (Gửi về cho Frontend tô màu vàng)
+		return true, nil
 	}
 
-	// 3. ĐÃ LƯU RỒI -> Thực hiện xóa bỏ (DELETE)
 	errDelete := r.db.WithContext(ctx).
 		Where("user_id = ? AND post_id = ?", userID, postID).
 		Delete(&domain.Bookmark{}).Error
@@ -52,7 +49,7 @@ func (r *bookmarkRepository) ToggleSavePost(ctx context.Context, userID int64, p
 		return false, errDelete
 	}
 
-	return false, nil // is_saved = false (Gửi về cho Frontend bỏ màu vàng)
+	return false, nil
 }
 
 // Lấy danh sách các bài viết đã lưu (Join bảng)
@@ -70,7 +67,7 @@ func (r *bookmarkRepository) GetSavedPosts(ctx context.Context, userID int64, li
 		`, userID).
 		Joins("JOIN bookmarks ON bookmarks.post_id = posts.id").
 		Where("bookmarks.user_id = ?", userID).
-		Preload("User"). // 👉 NẠP THÔNG TIN TÁC GIẢ BÀI VIẾT
+		Preload("User").
 		Order("bookmarks.created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&posts).Error

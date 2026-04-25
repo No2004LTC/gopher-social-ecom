@@ -9,10 +9,10 @@ import (
 
 type Notification struct {
 	ID        int64     `json:"id" gorm:"primaryKey"`
-	UserID    int64     `json:"user_id"`   // Người nhận
-	ActorID   int64     `json:"actor_id"`  // Người thực hiện (ví dụ: người Like)
-	Type      string    `json:"type"`      // FOLLOW, LIKE, NEW_POST...
-	EntityID  int64     `json:"entity_id"` // ID của Post hoặc Comment liên quan
+	UserID    int64     `json:"user_id"`
+	ActorID   int64     `json:"actor_id"`
+	Type      string    `json:"type"`
+	EntityID  int64     `json:"entity_id"`
 	Message   string    `json:"message"`
 	IsRead    bool      `json:"is_read" gorm:"default:false"`
 	CreatedAt time.Time `json:"created_at"`

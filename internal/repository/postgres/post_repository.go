@@ -17,12 +17,12 @@ func NewPostRepository(db *gorm.DB) domain.PostRepository {
 	return &postRepository{db: db}
 }
 
-// CREATE - Tạo bài viết mới
+// CREATE
 func (r *postRepository) Create(ctx context.Context, post *domain.Post) error {
 	return r.db.WithContext(ctx).Create(post).Error
 }
 
-// DELETE - Xóa bài viết (Chỉ chủ bài viết mới có quyền)
+// DELETE
 func (r *postRepository) DeletePost(ctx context.Context, postID int64, currentUserID int64) error {
 	result := r.db.WithContext(ctx).
 		Where("id = ? AND user_id = ?", postID, currentUserID).
@@ -37,7 +37,7 @@ func (r *postRepository) DeletePost(ctx context.Context, postID int64, currentUs
 	return nil
 }
 
-// UPDATE - Sửa nội dung bài viết
+// UPDATE
 func (r *postRepository) UpdatePost(ctx context.Context, postID int64, currentUserID int64, newContent string) error {
 	result := r.db.WithContext(ctx).Model(&domain.Post{}).
 		Where("id = ? AND user_id = ?", postID, currentUserID).
@@ -55,20 +55,11 @@ func (r *postRepository) UpdatePost(ctx context.Context, postID int64, currentUs
 	return nil
 }
 
-/*
-🎯 HÀM QUAN TRỌNG NHẤT: GetPosts
-
-	Hàm này thay thế cho toàn bộ GetList, GetNewsfeed, GetDiscovery...
-	- Nếu targetUserID = 0: Lấy tất cả bài viết trên hệ thống (Trang chủ)
-	- Nếu targetUserID > 0: Lấy bài viết của User cụ thể (Trang cá nhân/Profile người khác)
-*/
 func (r *postRepository) GetPosts(ctx context.Context, currentUserID int64, targetUserID int64, limit, offset int) ([]domain.Post, error) {
-	// Khởi tạo mảng rỗng để JSON trả về [] thay vì null nếu không có bài viết
 	posts := make([]domain.Post, 0)
 
 	query := r.db.WithContext(ctx).Model(&domain.Post{})
 
-	// Filter: Nếu xem Profile (của mình hoặc người khác) thì lọc theo user_id
 	if targetUserID > 0 {
 		query = query.Where("user_id = ?", targetUserID)
 	}
@@ -82,7 +73,7 @@ func (r *postRepository) GetPosts(ctx context.Context, currentUserID int64, targ
           (EXISTS (SELECT 1 FROM likes WHERE likes.post_id = posts.id AND likes.user_id = ?)) AS is_liked,
           (EXISTS (SELECT 1 FROM bookmarks WHERE bookmarks.post_id = posts.id AND bookmarks.user_id = ?)) AS is_saved
        `, currentUserID, currentUserID).
-		Preload("User"). // Load thông tin tác giả bài viết
+		Preload("User").
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).

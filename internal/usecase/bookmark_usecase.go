@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
 )
 
@@ -21,7 +22,7 @@ func (u *bookmarkUseCase) GetSavedPosts(ctx context.Context, userID int64, page 
 	if page < 1 {
 		page = 1
 	}
-	limit := 10 // Mỗi trang lấy 10 bài
+	limit := 10
 	offset := (page - 1) * limit
 
 	return u.bookmarkRepo.GetSavedPosts(ctx, userID, limit, offset)

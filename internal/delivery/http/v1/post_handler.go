@@ -73,7 +73,6 @@ func (h *PostHandler) GetGlobalFeed(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
-	// targetUserID = 0 nghĩa là lấy tất cả mọi người
 	posts, err := h.postUC.GetPosts(c.Request.Context(), currentUserID, 0, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

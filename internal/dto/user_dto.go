@@ -3,7 +3,6 @@ package dto
 // --- USER REQUESTS ---
 
 type UpdateProfileInput struct {
-	// Sử dụng con trỏ để hỗ trợ PATCH (chỉ cập nhật những trường gửi lên)
 	Username  *string `json:"username" binding:"omitempty,min=3"`
 	Bio       *string `json:"bio"`
 	AvatarURL *string `json:"avatar_url"`
@@ -11,7 +10,7 @@ type UpdateProfileInput struct {
 
 // --- USER RESPONSES ---
 
-// UserCompact: Dùng cho các danh sách (Search, Followers, Suggestions)
+// UserCompact
 type UserCompact struct {
 	ID           int64  `json:"id"`
 	Username     string `json:"username"`
@@ -21,7 +20,7 @@ type UserCompact struct {
 	IsOnline     bool   `json:"is_online"`
 }
 
-// SuggestedUserResponse: Dành riêng cho mục gợi ý kết bạn
+// SuggestedUserResponse
 type SuggestedUserResponse struct {
 	ID                 int64  `json:"id"`
 	Username           string `json:"username"`
@@ -29,7 +28,7 @@ type SuggestedUserResponse struct {
 	MutualFriendsCount int    `json:"mutual_friends_count"`
 }
 
-// UserProfileResponse: "Trùm cuối" của trang Profile cá nhân
+// UserProfileResponse
 type UserProfileResponse struct {
 	ID             int64  `json:"id"`
 	Username       string `json:"username"`

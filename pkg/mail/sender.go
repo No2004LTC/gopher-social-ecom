@@ -7,7 +7,7 @@ import (
 	"github.com/No2004LTC/gopher-social-ecom/config"
 )
 
-// EmailSender interface giúp Clean Architecture (dễ dàng thay thế bằng SendGrid/AWS sau này)
+// EmailSender
 type EmailSender interface {
 	SendEmail(to string, subject string, content string) error
 }
@@ -20,7 +20,7 @@ type gmailSender struct {
 	smtpServerPort    string
 }
 
-// NewGmailSender khởi tạo một bộ gửi thư bằng Gmail
+// NewGmailSender
 func NewGmailSender(cfg *config.Config) EmailSender {
 	return &gmailSender{
 		name:              "Gopher Social System",
@@ -32,7 +32,6 @@ func NewGmailSender(cfg *config.Config) EmailSender {
 }
 
 func (sender *gmailSender) SendEmail(to string, subject string, content string) error {
-	// Định dạng lại thư để tránh lỗi font tiếng Việt và hiển thị đẹp hơn
 	msg := []byte(fmt.Sprintf("To: %s\r\n"+
 		"Subject: %s\r\n"+
 		"MIME-version: 1.0;\r\n"+

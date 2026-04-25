@@ -8,118 +8,157 @@ import (
 	"sync"
 
 	"github.com/No2004LTC/gopher-social-ecom/internal/domain"
-	"github.com/redis/go-redis/v9" // 👉 NHỚ IMPORT REDIS
+	"github.com/redis/go-redis/v9"
 )
 
 type Hub struct {
-	// Dùng sync.Map cực an toàn
-	Clients       sync.Map
-	Broadcast     chan []byte
-	Notifications chan domain.Notification
-	Register      chan *Client
-	Unregister    chan *Client
-
-	// 👉 ĐÃ THÊM: Con trỏ Redis để các Client có thể dùng chung
-	Redis *redis.Client
+	Clients    sync.Map
+	Broadcast  chan []byte
+	Register   chan *Client
+	Unregister chan *Client
+	Redis      *redis.Client
 }
 
-// 👉 CẬP NHẬT CONSTRUCTOR: Bắt buộc truyền Redis vào khi tạo Hub
 func NewHub(rdb *redis.Client) *Hub {
 	return &Hub{
-		Broadcast:     make(chan []byte),
-		Register:      make(chan *Client),
-		Unregister:    make(chan *Client),
-		Notifications: make(chan domain.Notification, 100),
-		Redis:         rdb, // Gắn Redis vào Hub
+		Broadcast:  make(chan []byte, 256),
+		Register:   make(chan *Client, 100),
+		Unregister: make(chan *Client, 100),
+		Redis:      rdb,
 	}
 }
 
-// Hàm gửi tin nhắn trực tiếp đến 1 User cụ thể
-func (h *Hub) SendToUser(userID int64, message []byte) {
-	if val, ok := h.Clients.Load(userID); ok {
-		client := val.(*Client)
-		select {
-		case client.Send <- message:
-		default:
-			h.Clients.Delete(userID)
-			close(client.Send)
-		}
+// 📡 SendToUser: Dùng cho Chat 1-1 (Bắn qua Redis)
+func (h *Hub) SendToUser(userID int64, payload []byte) {
+	ctx := context.Background()
+	envelope := map[string]interface{}{
+		"to_user_id": userID,
+		"payload":    string(payload),
 	}
+	data, _ := json.Marshal(envelope)
+	h.Redis.Publish(ctx, "system:ws_messages", data)
 }
 
+// 🔔 BroadcastNotification: Dùng cho Like/Follow (Bắn qua Redis)
 func (h *Hub) BroadcastNotification(noti domain.Notification) {
-	select {
-	case h.Notifications <- noti:
-	default:
-		log.Printf("Cảnh báo: Hàng chờ thông báo đã đầy, bỏ qua thông báo cho User %d", noti.UserID)
-	}
+	ctx := context.Background()
+	payload, _ := json.Marshal(noti)
+	h.Redis.Publish(ctx, "system:notifications", payload)
 }
 
 func (h *Hub) Run() {
+	go func() {
+		ctx := context.Background()
+		pubsub := h.Redis.Subscribe(ctx, "system:notifications", "system:ws_messages")
+		defer pubsub.Close()
+
+		for msg := range pubsub.Channel() {
+			switch msg.Channel {
+			case "system:notifications":
+				var noti domain.Notification
+				if err := json.Unmarshal([]byte(msg.Payload), &noti); err == nil {
+					h.sendLocal(noti.UserID, "NOTIFICATION", noti)
+				} else {
+					log.Printf("❌ Lỗi parse Notification từ Redis: %v", err)
+				}
+
+			case "system:ws_messages":
+				var env struct {
+					ToUserID int64  `json:"to_user_id"`
+					Payload  string `json:"payload"`
+				}
+				if err := json.Unmarshal([]byte(msg.Payload), &env); err == nil {
+					h.sendRawLocal(env.ToUserID, []byte(env.Payload))
+				}
+			}
+		}
+	}()
+
 	for {
 		select {
 		case client := <-h.Register:
 			h.Clients.Store(client.UserID, client)
-			if h.Redis != nil {
-				ctx := context.Background()
-				h.Redis.HIncrBy(ctx, "system:online_users", strconv.FormatInt(client.UserID, 10), 1)
-
-				// 👉 PHÁT TÍN HIỆU: Báo cho tất cả mọi người là có thay đổi trạng thái online
-				statusNotify, _ := json.Marshal(map[string]interface{}{
-					"type": "USER_STATUS_CHANGE",
-					"data": map[string]interface{}{
-						"user_id": client.UserID,
-						"status":  "online",
-					},
-				})
-				h.Broadcast <- statusNotify // Gửi cho tất cả client đang kết nối
-			}
+			h.updateOnlineStatus(client.UserID, true)
 
 		case client := <-h.Unregister:
 			if _, ok := h.Clients.Load(client.UserID); ok {
 				h.Clients.Delete(client.UserID)
 				close(client.Send)
-
-				if h.Redis != nil {
-					ctx := context.Background()
-					userIDStr := strconv.FormatInt(client.UserID, 10)
-					newCount, _ := h.Redis.HIncrBy(ctx, "system:online_users", userIDStr, -1).Result()
-					if newCount <= 0 {
-						h.Redis.HDel(ctx, "system:online_users", userIDStr)
-
-						// 👉 PHÁT TÍN HIỆU: Báo cho mọi người là User này đã offline
-						statusNotify, _ := json.Marshal(map[string]interface{}{
-							"type": "USER_STATUS_CHANGE",
-							"data": map[string]interface{}{
-								"user_id": client.UserID,
-								"status":  "offline",
-							},
-						})
-						h.Broadcast <- statusNotify
-					}
-				}
+				h.updateOnlineStatus(client.UserID, false)
 			}
 
 		case message := <-h.Broadcast:
-			h.Clients.Range(func(key, value interface{}) bool {
+			h.Clients.Range(func(_, value interface{}) bool {
 				client := value.(*Client)
-				client.Send <- message
+				select {
+				case client.Send <- message:
+				default:
+					// Nếu hàng đợi của user này đầy, bỏ qua tin nhắn này để không làm kẹt Hub
+					log.Printf("⚠️ Hàng đợi của User %d đang đầy, drop tin nhắn broadcast", client.UserID)
+				}
 				return true
 			})
-
-		case noti := <-h.Notifications:
-			if val, ok := h.Clients.Load(noti.UserID); ok {
-				client := val.(*Client)
-				payload, _ := json.Marshal(map[string]interface{}{
-					"type": "NOTIFICATION",
-					"data": noti,
-				})
-				select {
-				case client.Send <- payload:
-				default:
-					log.Printf("Không thể gửi thông báo cho User %d", noti.UserID)
-				}
-			}
 		}
+	}
+}
+
+// --- HELPER FUNCTIONS ---
+
+func (h *Hub) sendLocal(userID int64, eventType string, data interface{}) {
+	if val, ok := h.Clients.Load(userID); ok {
+		client := val.(*Client)
+		msg, _ := json.Marshal(map[string]interface{}{
+			"type": eventType,
+			"data": data,
+		})
+
+		select {
+		case client.Send <- msg:
+		default:
+			log.Printf("⚠️ Không thể gửi %s cho User %d do kẹt kênh", eventType, userID)
+		}
+	}
+}
+
+func (h *Hub) sendRawLocal(userID int64, payload []byte) {
+	if val, ok := h.Clients.Load(userID); ok {
+		client := val.(*Client)
+
+		select {
+		case client.Send <- payload:
+		default:
+			log.Printf("⚠️ Không thể gửi Chat cho User %d do kẹt kênh", userID)
+		}
+	}
+}
+
+func (h *Hub) updateOnlineStatus(userID int64, isOnline bool) {
+	if h.Redis == nil {
+		return
+	}
+	ctx := context.Background()
+	userIDStr := strconv.FormatInt(userID, 10)
+
+	status := "offline"
+	if isOnline {
+		h.Redis.HIncrBy(ctx, "system:online_users", userIDStr, 1)
+		status = "online"
+	} else {
+		val, _ := h.Redis.HIncrBy(ctx, "system:online_users", userIDStr, -1).Result()
+		if val <= 0 {
+			h.Redis.HDel(ctx, "system:online_users", userIDStr)
+		} else {
+			return
+		}
+	}
+
+	statusNotify, _ := json.Marshal(map[string]interface{}{
+		"type": "USER_STATUS_CHANGE",
+		"data": map[string]interface{}{"user_id": userID, "status": status},
+	})
+
+	select {
+	case h.Broadcast <- statusNotify:
+	default:
 	}
 }

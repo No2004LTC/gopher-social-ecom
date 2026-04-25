@@ -83,7 +83,6 @@ func (r *chatRepository) GetConversations(ctx context.Context, userID int64) ([]
 }
 
 func (r *chatRepository) MarkMessagesAsRead(ctx context.Context, myUserID, partnerID int64) error {
-	// Chỉ update những tin nhắn GỬI ĐẾN mình (to_user_id) TỪ người đó (from_user_id)
 	result := r.db.WithContext(ctx).
 		Model(&domain.Message{}).
 		Where("to_user_id = ? AND from_user_id = ? AND is_read = false", myUserID, partnerID).

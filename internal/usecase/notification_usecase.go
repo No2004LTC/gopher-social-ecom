@@ -21,14 +21,11 @@ func NewNotificationUsecase(repo domain.NotificationRepository, hub *ws.Hub) dom
 }
 
 func (u *notificationUsecase) SendNotification(ctx context.Context, noti *domain.Notification) error {
-	// 1. Lưu vào Database (Persistence)
-	if err := u.repo.Create(ctx, noti); err != nil {
+	err := u.repo.Create(ctx, noti)
+	if err != nil {
 		return err
 	}
-
-	// 2. Bắn qua WebSocket (Real-time)
-	// Đẩy vào channel Notifications mà cậu đã viết ở Hub
-	u.hub.Notifications <- *noti
+	u.hub.BroadcastNotification(*noti)
 
 	return nil
 }
@@ -40,7 +37,7 @@ func (u *notificationUsecase) GetNotifications(ctx context.Context, userID int64
 }
 
 func (u *notificationUsecase) MarkAsRead(ctx context.Context, notiID int64) error {
-	// Usecase không trực tiếp sửa DB, nó gọi Repo làm
+
 	return u.repo.MarkAsRead(ctx, notiID)
 }
 
@@ -48,9 +45,8 @@ func (u *notificationUsecase) GetUserNotifications(ctx context.Context, userID i
 	return u.repo.GetUserNotifications(ctx, userID, limit, offset)
 }
 
-// GetUnreadCount xử lý logic đếm số thông báo
+// GetUnreadCount
 func (uc *notificationUsecase) GetUnreadCount(ctx context.Context, userID int64) (int, error) {
-	// Ở thông báo thì không cần logic phức tạp như Chat, gọi thẳng Repo là xong
 	return uc.repo.GetUnreadCount(ctx, userID)
 }
 
