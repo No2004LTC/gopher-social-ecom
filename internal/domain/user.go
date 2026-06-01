@@ -18,6 +18,7 @@ type User struct {
 	Bio          string    `json:"bio"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	Status       string    `gorm:"column:status;default:active" json:"status"`
 
 	// Các trường ảo dùng để map dữ liệu Count từ Repository/Usecase
 	FollowersCount int  `json:"followers_count" gorm:"-"`

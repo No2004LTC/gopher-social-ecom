@@ -58,6 +58,10 @@ func (u *authUsecase) Login(ctx context.Context, email, password string) (string
 		return "", nil, errors.New("email hoặc mật khẩu không chính xác")
 	}
 
+	if user.Status == "banned" {
+		return "", nil, errors.New("tài khoản của bạn đã bị khóa, vui lòng liên hệ quản trị viên")
+	}
+
 	expiry, _ := time.ParseDuration(u.cfg.JWTExpiry)
 	token, _ := auth.GenerateToken(user.ID, u.cfg.JWTSecret, expiry)
 	return token, user, nil

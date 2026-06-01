@@ -31,6 +31,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
+	// Kiểm tra user
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "Dữ liệu email không hợp lệ")
@@ -41,9 +42,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.Error(c, http.StatusUnauthorized, err.Error())
 		return
 	}
+
+	isAdmin := user.Email == "lethanh20052004@gmail.com"
+
 	c.JSON(http.StatusOK, dto.LoginResponse{
 		AccessToken: token,
 		TokenType:   "Bearer",
+		IsAdmin:     isAdmin,
 		User: dto.AuthUserResponse{
 			ID: user.ID, Username: user.Username, Email: user.Email, AvatarURL: user.AvatarURL,
 		},

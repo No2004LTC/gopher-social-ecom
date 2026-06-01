@@ -28,7 +28,6 @@ func NewHub(rdb *redis.Client) *Hub {
 	}
 }
 
-// SendToUser
 func (h *Hub) SendToUser(userID int64, payload []byte) {
 	ctx := context.Background()
 	envelope := map[string]interface{}{
@@ -39,7 +38,6 @@ func (h *Hub) SendToUser(userID int64, payload []byte) {
 	h.Redis.Publish(ctx, "system:ws_messages", data)
 }
 
-// 🔔 BroadcastNotification
 func (h *Hub) BroadcastNotification(noti domain.Notification) {
 	ctx := context.Background()
 	payload, _ := json.Marshal(noti)
@@ -49,7 +47,8 @@ func (h *Hub) BroadcastNotification(noti domain.Notification) {
 func (h *Hub) Run() {
 	go func() {
 		ctx := context.Background()
-		pubsub := h.Redis.Subscribe(ctx, "system:notifications", "system:ws_messages")
+		// 🚀 THÊM "system:status_change" VÀO DANH SÁCH ĐĂNG KÝ
+		pubsub := h.Redis.Subscribe(ctx, "system:notifications", "system:ws_messages", "system:status_change")
 		defer pubsub.Close()
 
 		for msg := range pubsub.Channel() {
@@ -70,6 +69,10 @@ func (h *Hub) Run() {
 				if err := json.Unmarshal([]byte(msg.Payload), &env); err == nil {
 					h.sendRawLocal(env.ToUserID, []byte(env.Payload))
 				}
+
+			// 🚀 HỨNG SỰ KIỆN ONLINE/OFFLINE TỪ REDIS VÀ BẮN XUỐNG TẤT CẢ CLIENT
+			case "system:status_change":
+				h.Broadcast <- []byte(msg.Payload)
 			}
 		}
 	}()
@@ -81,11 +84,16 @@ func (h *Hub) Run() {
 			h.updateOnlineStatus(client.UserID, true)
 
 		case client := <-h.Unregister:
-			if _, ok := h.Clients.Load(client.UserID); ok {
-				h.Clients.Delete(client.UserID)
-				close(client.Send)
-				h.updateOnlineStatus(client.UserID, false)
+			// 🚀 BẢO VỆ CHỐNG XÓA NHẦM TAB MỚI
+			if val, ok := h.Clients.Load(client.UserID); ok {
+				currentClient := val.(*Client)
+				// CHỈ xóa khỏi map nếu client đang đòi ngắt ĐÚNG LÀ client đang lưu
+				if currentClient == client {
+					h.Clients.Delete(client.UserID)
+				}
 			}
+			close(client.Send)
+			h.updateOnlineStatus(client.UserID, false)
 
 		case message := <-h.Broadcast:
 			h.Clients.Range(func(_, value interface{}) bool {
@@ -93,7 +101,6 @@ func (h *Hub) Run() {
 				select {
 				case client.Send <- message:
 				default:
-					// Nếu hàng đợi của user này đầy, bỏ qua tin nhắn này để không làm kẹt Hub
 					log.Printf("⚠️ Hàng đợi của User %d đang đầy, drop tin nhắn broadcast", client.UserID)
 				}
 				return true
@@ -102,8 +109,6 @@ func (h *Hub) Run() {
 	}
 }
 
-// --- HELPER FUNCTIONS ---
-// sendLocal
 func (h *Hub) sendLocal(userID int64, eventType string, data interface{}) {
 	if val, ok := h.Clients.Load(userID); ok {
 		client := val.(*Client)
@@ -120,7 +125,6 @@ func (h *Hub) sendLocal(userID int64, eventType string, data interface{}) {
 	}
 }
 
-// sendRawLocal
 func (h *Hub) sendRawLocal(userID int64, payload []byte) {
 	if val, ok := h.Clients.Load(userID); ok {
 		client := val.(*Client)
@@ -133,7 +137,6 @@ func (h *Hub) sendRawLocal(userID int64, payload []byte) {
 	}
 }
 
-// updateOnlineStatus
 func (h *Hub) updateOnlineStatus(userID int64, isOnline bool) {
 	if h.Redis == nil {
 		return
@@ -149,8 +152,14 @@ func (h *Hub) updateOnlineStatus(userID int64, isOnline bool) {
 		val, _ := h.Redis.HIncrBy(ctx, "system:online_users", userIDStr, -1).Result()
 		if val <= 0 {
 			h.Redis.HDel(ctx, "system:online_users", userIDStr)
+			status = "offline"
 		} else {
-			return
+			if _, exists := h.Clients.Load(userID); !exists {
+				h.Redis.HDel(ctx, "system:online_users", userIDStr)
+				status = "offline"
+			} else {
+				status = "online"
+			}
 		}
 	}
 
@@ -159,8 +168,6 @@ func (h *Hub) updateOnlineStatus(userID int64, isOnline bool) {
 		"data": map[string]interface{}{"user_id": userID, "status": status},
 	})
 
-	select {
-	case h.Broadcast <- statusNotify:
-	default:
-	}
+	// 🚀 BỎ h.Broadcast CŨ ĐI, BẮN THẲNG LÊN REDIS ĐỂ LAN TRUYỀN TOÀN HỆ THỐNG
+	h.Redis.Publish(ctx, "system:status_change", statusNotify)
 }

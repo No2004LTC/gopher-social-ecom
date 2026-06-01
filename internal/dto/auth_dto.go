@@ -35,5 +35,6 @@ type AuthUserResponse struct {
 type LoginResponse struct {
 	AccessToken string           `json:"access_token"`
 	TokenType   string           `json:"token_type"`
+	IsAdmin     bool             `json:"is_admin"`
 	User        AuthUserResponse `json:"user"`
 }

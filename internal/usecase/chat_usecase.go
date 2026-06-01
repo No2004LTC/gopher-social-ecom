@@ -49,6 +49,11 @@ func (uc *chatUsecase) GetCategorizedConversations(ctx context.Context, userID i
 	var strangers []dto.Conversation
 
 	for _, f := range followingList {
+		// BẠN BÈ = MUTUAL FOLLOW: mình follow họ VÀ họ follow lại mình
+		// Nếu chỉ mình follow họ (is_followed_by = false) → không phải bạn bè
+		if !f.IsFollowedBy {
+			continue
+		}
 		friendMap[f.ID] = dto.Conversation{
 			PartnerID:        f.ID,
 			PartnerUsername:  f.Username,

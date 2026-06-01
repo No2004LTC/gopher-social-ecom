@@ -99,14 +99,22 @@ func (uc *userUsecase) GetFriendSuggestions(ctx context.Context, userID int64) (
 
 // GetOnlineContacts
 func (uc *userUsecase) GetOnlineContacts(ctx context.Context, userID int64) ([]dto.UserCompact, error) {
-	contacts, _ := uc.userRepo.GetFollowers(ctx, userID, 50, 0)
+	// 🚀 FIX: Chỉ lấy bạn bè (mutual follow), không lấy follower một chiều
+	contacts, _ := uc.userRepo.GetFollowing(ctx, userID, 1000, 0)
 	onlineMap, _ := uc.redisClient.HGetAll(ctx, "system:online_users").Result()
 
+	var mutualOnline []dto.UserCompact
 	for i := range contacts {
+		// Chỉ BẠN BÈ (có follow lại) mới được hiển thị online
+		if !contacts[i].IsFollowedBy {
+			continue
+		}
+
 		userIDStr := strconv.FormatInt(contacts[i].ID, 10)
 		if _, exists := onlineMap[userIDStr]; exists {
 			contacts[i].IsOnline = true
+			mutualOnline = append(mutualOnline, contacts[i])
 		}
 	}
-	return contacts, nil
+	return mutualOnline, nil
 }

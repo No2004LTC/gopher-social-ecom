@@ -58,9 +58,14 @@ func main() {
 	authUC := usecase.NewAuthUsecase(authRepo, cfg, redisClient, emailSender)
 	authHandler := v1.NewAuthHandler(authUC)
 
+	// --- MODULE: ADMIN ---
+	adminRepo := postgres.NewAdminRepository(database)
+	adminUsecase := usecase.NewAdminUsecase(adminRepo)
+	adminHandler := v1.NewAdminHandler(adminUsecase)
+
 	// --- MODULE: FOLLOW ---
 	followRepo := postgres.NewFollowRepository(database)
-	followUC := usecase.NewFollowUsecase(followRepo, notiUC)
+	followUC := usecase.NewFollowUsecase(followRepo, notiUC, redisClient)
 	followHandler := v1.NewFollowHandler(followUC)
 
 	// --- MODULE: POST ---
@@ -114,6 +119,18 @@ func main() {
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/send-otp", authHandler.SendPasswordOTP)
 			auth.POST("/reset-password", authHandler.ResetPassword)
+		}
+
+		// Admin Group
+		adminRoutes := v1Group.Group("/admin", middleware.AuthMiddleware(cfg.JWTSecret), middleware.AdminMiddleware(adminRepo))
+		{
+			adminRoutes.GET("/stats", adminHandler.GetDashboardStats)
+			adminRoutes.GET("/growth", adminHandler.GetGrowthStats)
+			adminRoutes.GET("/users", adminHandler.GetAllUsers)
+			adminRoutes.PUT("/users/:id/ban", adminHandler.BanUser)
+			adminRoutes.PUT("/users/:id/unban", adminHandler.UnbanUser)
+			adminRoutes.GET("/posts", adminHandler.GetModerationFeed)
+			adminRoutes.DELETE("/posts/:id", adminHandler.DeletePost)
 		}
 
 		// User Group
